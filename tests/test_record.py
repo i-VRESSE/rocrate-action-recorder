@@ -846,3 +846,95 @@ def test_record_with_filetype_binary_mode(tmp_path):
 
     assert "data/input.bin" in entities
     assert "results/output.bin" in entities
+
+
+def test_record_with_str_argument(tmp_path):
+    """Test that record() works with str type arguments.
+
+    Tests that str type arguments are correctly handled by:
+    - Converting absolute path strings to relative crate paths
+    - Validating that paths are within crate_dir
+    - Recording files with proper metadata
+    """
+    crate_dir = tmp_path
+    data_dir = crate_dir / "data"
+    results_dir = crate_dir / "results"
+    data_dir.mkdir()
+    results_dir.mkdir()
+    input_path = data_dir / "input.txt"
+    output_path = results_dir / "output.txt"
+    input_path.write_text("Hello World\n")
+
+    parser = argparse.ArgumentParser(prog="myscript", description="Example CLI")
+    parser.add_argument("--input", type=str, help="Input file")
+    parser.add_argument("--output", type=str, help="Output file")
+
+    # Parse arguments with absolute path strings
+    args = parser.parse_args(
+        [
+            "--input",
+            str(input_path),
+            "--output",
+            str(output_path),
+        ]
+    )
+
+    start_time = datetime(2026, 1, 16, 12, 0, 0)
+    end_time = datetime(2026, 1, 16, 12, 0, 5)
+
+    # Simulate the script's main operation
+    output_path.write_text(input_path.read_text().upper())
+
+    crate_meta = rocrate_action_recorder.record(
+        args=ArgparseArguments(args),
+        input_files=["input"],
+        output_files=["output"],
+        parser=ArgparseRecorder(parser),
+        start_time=start_time,
+        crate_dir=crate_dir,
+        argv=["myscript", "--input", str(input_path), "--output", str(output_path)],
+        end_time=end_time,
+        current_user="test_user",
+        software_version="1.0.0",
+    )
+
+    assert crate_meta.exists()
+    assert_crate_shape(crate_dir)
+
+    # Verify the entities were created with correct relative paths
+    data = json.loads(crate_meta.read_text(encoding="utf-8"))
+    entities = {entity["@id"]: entity for entity in data["@graph"]}
+
+    # Check that files are recorded with relative paths
+    assert "data/input.txt" in entities
+    assert "results/output.txt" in entities
+    assert entities["data/input.txt"]["@type"] == "File"
+    assert entities["results/output.txt"]["@type"] == "File"
+
+    # Verify file properties
+    assert entities["data/input.txt"]["name"] == "Input file"
+    assert entities["results/output.txt"]["name"] == "Output file"
+    assert entities["data/input.txt"]["encodingFormat"] == "text/plain"
+    assert entities["results/output.txt"]["encodingFormat"] == "text/plain"
+
+    # Verify CreateAction references the correct files
+    action_id = f"myscript --input {input_path} --output {output_path}"
+    action = entities[action_id]
+    assert action["@type"] == "CreateAction"
+    action_object_ids = [obj["@id"] for obj in action["object"]]
+    action_result_ids = [res["@id"] for res in action["result"]]
+    assert action_object_ids == ["data/input.txt"]
+    assert action_result_ids == ["results/output.txt"]
+
+    # Verify Dataset hasPart includes files
+    dataset = entities["./"]
+    has_part_ids = {p["@id"] for p in dataset.get("hasPart", [])}
+    assert has_part_ids == {"data/input.txt", "results/output.txt"}
+
+    # Verify Person and SoftwareApplication are created
+    persons = [e for e in data["@graph"] if e.get("@type") == "Person"]
+    softwares = [e for e in data["@graph"] if e.get("@type") == "SoftwareApplication"]
+    assert len(persons) == 1
+    assert persons[0]["@id"] == "test_user"
+    assert len(softwares) == 1
+    assert softwares[0]["@id"] == "myscript@1.0.0"

@@ -36,11 +36,16 @@ def record(
     crate is written as ro-crate-metadata.json in `crate_dir` (or the current
     working directory).
 
+    Argument values can be passed as `pathlib.Path` objects, `str` paths, or
+    file-like objects (e.g., from `argparse.FileType`). All paths must resolve
+    to locations within the crate_dir.
+
     Args:
         args: Parsed arguments from the CLI. The names in `input_files`,
             `output_files`, `input_dirs`, and `output_dirs` must correspond to
-            argument names that point to files or directories on disk. Should
-            implement the Arguments protocol.
+            argument names that point to files or directories on disk. Argument
+            values can be `str` paths, `pathlib.Path` objects, or file-like
+            objects. Should implement the Arguments protocol.
         parser: The CLI parser that defines the program. Its program name and
             description populate crate metadata. Argument names should
             match the entries in `input_files`/`output_files`/`input_dirs`/`output_dirs`.
@@ -73,8 +78,8 @@ def record(
 
     Raises:
         ValueError: If any name in `input_files`, `output_files`, `input_dirs`,
-            or `output_dirs` does not resolve to a file or directory `Path` on
-            `args`.
+            or `output_dirs` does not resolve to a file or directory within
+            crate_dir on `args`.
     """
     crate_root = Path(crate_dir or Path.cwd())
     crate_root.mkdir(parents=True, exist_ok=True)
