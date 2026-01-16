@@ -27,8 +27,8 @@ record(
     args=args,
     parser=parser,
     argv=['example-cli', '--input', 'data/input.txt', '--output', 'data/output.txt'],
-    inputs=['input'],
-    outputs=['output'],
+    input_files=['input'],
+    output_files=['output'],
     start_time=datetime.datetime.now(),
 )
 ```

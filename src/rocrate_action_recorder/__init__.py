@@ -80,6 +80,24 @@ def record(
         ValueError: If any name in `input_files`, `output_files`, `input_dirs`,
             or `output_dirs` does not resolve to a file or directory within
             crate_dir on `args`.
+
+    Example:
+        >>> import argparse
+        >>> from datetime import datetime
+        >>> from pathlib import Path
+        >>> parser = argparse.ArgumentParser(prog="example-cli", description="Example CLI")
+        >>> parser.add_argument("--input", type=Path, required=True, help="Input file")
+        >>> parser.add_argument("--output", type=Path, required=True, help="Output file")
+        >>> args = parser.parse_args(['--input', 'data/input.txt', '--output', 'data/output.txt'])
+        >>> record(
+        ...     args=args,
+        ...     parser=parser,
+        ...     argv=['example-cli', '--input', 'data/input.txt', '--output', 'data/output.txt'],
+        ...     input_files=['input'],
+        ...     output_files=['output'],
+        ...     start_time=datetime.now(),
+        ... )
+        PosixPath('ro-crate-metadata.json')
     """
     crate_root = Path(crate_dir or Path.cwd())
     crate_root.mkdir(parents=True, exist_ok=True)
