@@ -20,8 +20,8 @@ def handler(args, parser):
 
     rocrate_action_recorder.record(
         args=ArgparseArguments(args),
-        inputs=["input"],
-        outputs=["output"],
+        input_files=["input"],
+        output_files=["output"],
         parser=ArgparseRecorder(parser),
         start_time=start_time,
     )

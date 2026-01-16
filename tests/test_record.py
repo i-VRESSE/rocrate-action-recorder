@@ -55,8 +55,8 @@ def test_record_happy_path_valid_crate(tmp_path, parser):
 
     crate_meta = rocrate_action_recorder.record(
         args=ArgparseArguments(args),
-        inputs=["input"],
-        outputs=["output"],
+        input_files=["input"],
+        output_files=["output"],
         parser=ArgparseRecorder(parser),
         start_time=start_time,
         crate_dir=crate_dir,
@@ -187,8 +187,8 @@ def test_record_updates_existing_action_and_files_on_repeat_command(tmp_path, pa
 
     crate_meta_1 = rocrate_action_recorder.record(
         args=ArgparseArguments(args),
-        inputs=["input"],
-        outputs=["output"],
+        input_files=["input"],
+        output_files=["output"],
         parser=ArgparseRecorder(parser),
         start_time=start_time_1,
         crate_dir=crate_dir,
@@ -212,8 +212,8 @@ def test_record_updates_existing_action_and_files_on_repeat_command(tmp_path, pa
 
     crate_meta_2 = rocrate_action_recorder.record(
         args=ArgparseArguments(args),
-        inputs=["input"],
-        outputs=["output"],
+        input_files=["input"],
+        output_files=["output"],
         parser=ArgparseRecorder(parser),
         start_time=start_time_2,
         crate_dir=crate_dir,
@@ -278,8 +278,8 @@ def test_record_rejects_paths_outside_crate_root(tmp_path, parser):
     with pytest.raises(ValueError):
         rocrate_action_recorder.record(
             args=ArgparseArguments(args),
-            inputs=["input"],
-            outputs=["output"],
+            input_files=["input"],
+            output_files=["output"],
             parser=ArgparseRecorder(parser),
             start_time=datetime(2026, 1, 16, 12, 0, 0),
             crate_dir=crate_dir,
@@ -321,8 +321,8 @@ def test_record_dedup_person_and_softwareapplication(tmp_path, parser):
         )
         rocrate_action_recorder.record(
             args=ArgparseArguments(args),
-            inputs=["input"],
-            outputs=["output"],
+            input_files=["input"],
+            output_files=["output"],
             parser=ArgparseRecorder(parser),
             start_time=datetime(2026, 1, 16, 12, 0, 0),
             crate_dir=crate_dir,
@@ -385,8 +385,8 @@ def test_file_reuse_in_chain(tmp_path, parser):
 
     rocrate_action_recorder.record(
         args=ArgparseArguments(args1),
-        inputs=["input"],
-        outputs=["output"],
+        input_files=["input"],
+        output_files=["output"],
         parser=ArgparseRecorder(parser),
         start_time=start_time_1,
         crate_dir=crate_dir,
@@ -425,8 +425,8 @@ def test_file_reuse_in_chain(tmp_path, parser):
 
     rocrate_action_recorder.record(
         args=ArgparseArguments(args2),
-        inputs=["input"],
-        outputs=["output"],
+        input_files=["input"],
+        output_files=["output"],
         parser=ArgparseRecorder(parser),
         start_time=start_time_2,
         crate_dir=crate_dir,
@@ -548,8 +548,8 @@ def test_record_adds_new_software_on_version_change(tmp_path, parser):
 
     rocrate_action_recorder.record(
         args=ArgparseArguments(args_1),
-        inputs=["input"],
-        outputs=["output"],
+        input_files=["input"],
+        output_files=["output"],
         parser=ArgparseRecorder(parser),
         start_time=start_time_1,
         crate_dir=crate_dir,
@@ -584,8 +584,8 @@ def test_record_adds_new_software_on_version_change(tmp_path, parser):
 
     rocrate_action_recorder.record(
         args=ArgparseArguments(args_2),
-        inputs=["input"],
-        outputs=["output"],
+        input_files=["input"],
+        output_files=["output"],
         parser=ArgparseRecorder(parser),
         start_time=start_time_2,
         crate_dir=crate_dir,
