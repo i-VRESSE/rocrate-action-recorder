@@ -9,3 +9,4 @@ example/myscript.py --input output2.txt --output output2.txt
 
 When software version changes, add new SoftwareApplication to the RO-Crate.
 Change SoftwareApplication.identifier to include version.
+Add test in tests/test_record.py to verify that both versions of the software are recorded in the RO-Crate.
