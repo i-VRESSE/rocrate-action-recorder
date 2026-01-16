@@ -1,6 +1,8 @@
 # rocrate-action-recorder
 
-Records calls of cli commands into a Research Object Crate (RO-Crate).
+Records calls of cli commands into a [Research Object Crate (RO-Crate)](https://www.researchobject.org/ro-crate/).
+
+Supports [RO-Crate 1.1](https://www.researchobject.org/ro-crate/specification/1.1/index.html) specification..
 
 ## Install
 
