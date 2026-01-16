@@ -73,58 +73,74 @@ def test_record_happy_path_valid_crate(tmp_path, parser):
 
     assert_crate_shape(crate_dir)
 
-    expected = {
-        "@context": "https://w3id.org/ro/crate/1.1/context",
-        "@graph": [
-            {
-                "@id": "ro-crate-metadata.json",
-                "@type": "CreativeWork",
-                "about": {"@id": "./"},
-                "conformsTo": {"@id": "https://w3id.org/ro/crate/1.1"},
-            },
-            {
-                "@id": "./",
-                "@type": "Dataset",
-                "name": "myscript actions",
-                "description": "Example CLI",
-                "hasPart": [{"@id": "data/input.txt"}, {"@id": "results/output.txt"}],
-                "datePublished": "2026-01-16",
-                "license": "CC-BY-4.0",
-            },
-            {"@id": "test_user", "@type": "Person", "name": "test_user"},
-            {
-                "@id": "myscript",
-                "@type": "SoftwareApplication",
-                "name": "myscript",
-                "description": "Example CLI",
-                "version": "1.0.0",
-            },
-            {
-                "@id": f"myscript --input {input_path} --output {output_path}",
-                "@type": "CreateAction",
-                "name": "Example CLI",
-                "startTime": "2026-01-16T12:00:00",
-                "object": [{"@id": "data/input.txt"}],
-                "instrument": {"@id": "myscript"},
-                "endTime": "2026-01-16T12:00:05",
-                "result": [{"@id": "results/output.txt"}],
-                "agent": {"@id": "test_user"},
-            },
-            {
-                "@id": "data/input.txt",
-                "@type": "File",
-                "name": "Input file",
-                "encodingFormat": "text/plain",
-                "contentSize": "12",
-            },
-            {
-                "@id": "results/output.txt",
-                "@type": "File",
-                "name": "Output file",
-                "encodingFormat": "text/plain",
-                "contentSize": "12",
-            },
-        ],
-    }
+    expected_entities = [
+        {
+            "@id": "ro-crate-metadata.json",
+            "@type": "CreativeWork",
+            "about": {"@id": "./"},
+            "conformsTo": {"@id": "https://w3id.org/ro/crate/1.1"},
+        },
+        {
+            "@id": "./",
+            "@type": "Dataset",
+            "name": "myscript actions",
+            "description": "Example CLI",
+            "hasPart": [{"@id": "data/input.txt"}, {"@id": "results/output.txt"}],
+            "datePublished": "2026-01-16",
+            "license": "CC-BY-4.0",
+        },
+        {"@id": "test_user", "@type": "Person", "name": "test_user"},
+        {
+            "@id": "myscript",
+            "@type": "SoftwareApplication",
+            "name": "myscript",
+            "description": "Example CLI",
+            "version": "1.0.0",
+        },
+        {
+            "@id": f"myscript --input {input_path} --output {output_path}",
+            "@type": "CreateAction",
+            "name": "Example CLI",
+            "startTime": "2026-01-16T12:00:00",
+            "object": [{"@id": "data/input.txt"}],
+            "instrument": {"@id": "myscript"},
+            "endTime": "2026-01-16T12:00:05",
+            "result": [{"@id": "results/output.txt"}],
+            "agent": {"@id": "test_user"},
+        },
+        {
+            "@id": "data/input.txt",
+            "@type": "File",
+            "name": "Input file",
+            "encodingFormat": "text/plain",
+            "contentSize": "12",
+        },
+        {
+            "@id": "results/output.txt",
+            "@type": "File",
+            "name": "Output file",
+            "encodingFormat": "text/plain",
+            "contentSize": "12",
+        },
+    ]
     actual = json.loads(crate_meta.read_text(encoding="utf-8"))
-    assert actual == expected
+
+    # Check context
+    assert actual["@context"] == "https://w3id.org/ro/crate/1.1/context"
+
+    # Check graph entities (order-independent comparison since RO-Crate is JSON-LD)
+    actual_entities = {entity["@id"]: entity for entity in actual["@graph"]}
+    expected_entities_dict = {entity["@id"]: entity for entity in expected_entities}
+
+    assert set(actual_entities.keys()) == set(expected_entities_dict.keys()), (
+        f"Entity IDs mismatch.\nActual: {set(actual_entities.keys())}\n"
+        f"Expected: {set(expected_entities_dict.keys())}"
+    )
+
+    for entity_id, expected_entity in expected_entities_dict.items():
+        actual_entity = actual_entities[entity_id]
+        assert actual_entity == expected_entity, (
+            f"Entity {entity_id} mismatch.\n"
+            f"Expected: {expected_entity}\n"
+            f"Actual: {actual_entity}"
+        )

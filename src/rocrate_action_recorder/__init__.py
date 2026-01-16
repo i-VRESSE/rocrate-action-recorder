@@ -3,40 +3,12 @@ import getpass
 import importlib.metadata
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
-from typing import cast
 
-import msgspec
-from msgspec_schemaorg.base import SchemaOrgBase
-from msgspec_schemaorg.models import (
-    CreativeWork,
-    MediaObject,
-    Person,
-    SoftwareApplication,
-    CreateAction,
-    Thing,
-    Dataset,
-)
-from rdflib.util import date_time
-
-
-class ROCrateCFile(MediaObject):
-    type: str = msgspec.field(default_factory=lambda: "File", name="@type")
-
-
-class ROCrateCreativeWork(CreativeWork):
-    conformsTo: SchemaOrgBase | None = None
-
-
-def as_link[T: SchemaOrgBase](thing: T) -> T:
-    if thing.id is None:
-        raise ValueError("Thing must have an id to be converted to a link")
-    return cast(T, SchemaOrgBase(id=thing.id))
-
-
-def as_links[T: SchemaOrgBase](things: list[T]) -> list[T]:
-    return [as_link(t) for t in things]
+from rocrate.rocrate import ROCrate
+from rocrate.model.person import Person
+from rocrate.model.softwareapplication import SoftwareApplication
 
 
 def record(
@@ -96,6 +68,7 @@ def record(
     crate_root.mkdir(parents=True, exist_ok=True)
 
     argv_list = list(argv) if argv is not None else list(sys.argv)
+    # TODO handle args with spaces in them
     action_id = " ".join(argv_list)
 
     if inputs is None:
@@ -115,10 +88,9 @@ def record(
         try:
             software_version = importlib.metadata.version(parser.prog)
         except Exception:
+            # TODO try to determine package from calller frame?
             software_version = None
 
-    if end_time is None:
-        end_time = date_time.now(timezone.utc)
     if end_time is None:
         raise ValueError("end_time could not be determined")
 
@@ -130,82 +102,70 @@ def record(
             rel = Path(os.path.relpath(path, crate_root))
         return rel
 
-    person = Person(id=current_user, name=current_user)
-
-    software_id = parser.prog
-    software = SoftwareApplication(
-        id=software_id,
-        name=parser.prog,
-        description=parser.description,
-        version=software_version,
-    )
-
     def find_action(k: str):
         for action in parser._actions:
             if action.dest == k:
                 return action
         return None
 
-    def to_file(o: str) -> ROCrateCFile:
+    def to_file(o: str):
         path = getattr(args, o, None)
         if not isinstance(path, Path):
             raise ValueError(f"Expected Path for argument '{o}', got {type(path)}")
         rpath = _relpath(path)
-        action = find_action(o)
-        name = action.help if action is not None else o
-        return ROCrateCFile(
-            id=str(rpath),
-            name=name,
-            contentSize=str(path.stat().st_size),
-            encodingFormat="text/plain",  # TODO pass as arg or detect MIME type
+        action_obj = find_action(o)
+        name = action_obj.help if action_obj is not None else o
+        return crate.add_file(
+            source=path,
+            dest_path=str(rpath),
+            properties={
+                "name": name,
+                "contentSize": str(path.stat().st_size),
+                "encodingFormat": "text/plain",  # TODO pass as arg or detect MIME type
+            },
         )
 
-    # My IDE does not undstand that File is a CreativeWork subclass or Thing subclass,
-    # so we need to cast here
-    objects: list[Thing] = [to_file(o) for o in inputs]
-    results: list[Thing] = [to_file(o) for o in outputs]
-    file_entities = cast(list[CreativeWork], objects + results)
+    source = crate_root / "ro-crate-metadata.json"
+    if not source.exists():
+        source = None
+    crate = ROCrate(source)
 
-    action = CreateAction(
-        id=action_id,
-        name=parser.description or parser.prog,
-        agent=as_link(person),
-        instrument=as_link(software),
-        startTime=start_time,
-        endTime=end_time,
-        object=as_links(objects),
-        result=as_links(results),
+    agent = crate.add(Person(crate, current_user, properties={"name": current_user}))
+
+    software = crate.add(
+        SoftwareApplication(
+            crate,
+            parser.prog,
+            properties={
+                "name": parser.prog,
+                "description": parser.description,
+                "version": software_version,
+            },
+        )
     )
 
-    dataset = Dataset(
-        id="./",
-        name=f"{parser.prog} actions",
-        description=parser.description or f"Calls to {parser.prog}",
-        datePublished=end_time.date(),
-        license=dataset_license,
-        hasPart=as_links(file_entities),
+    objects = [to_file(o) for o in inputs]
+    results = [to_file(o) for o in outputs]
+
+    crate.add_action(
+        instrument=software,
+        identifier=action_id,
+        object=objects,
+        result=results,
+        properties={
+            "name": parser.description or parser.prog,
+            "startTime": start_time.isoformat(),
+            "endTime": end_time.isoformat(),
+            "agent": agent,
+        },
     )
 
-    metadata = ROCrateCreativeWork(
-        id="ro-crate-metadata.json",
-        about=as_link(dataset),
-        conformsTo=SchemaOrgBase(id="https://w3id.org/ro/crate/1.1"),
-    )
+    # Set root dataset properties
+    crate.name = f"{parser.prog} actions"
+    crate.description = parser.description or f"Calls to {parser.prog}"
+    crate.datePublished = end_time.date()
+    if dataset_license is not None:
+        crate.license = dataset_license
 
-    graph = [
-        metadata,
-        dataset,
-        person,
-        software,
-        action,
-    ] + file_entities
-
-    crate = SchemaOrgBase(
-        context="https://w3id.org/ro/crate/1.1/context",
-        graph=graph,
-    )
-
-    out_path = crate_root / "ro-crate-metadata.json"
-    json_bytes = msgspec.json.encode(crate)
-    out_path.write_bytes(json_bytes)
-    return out_path
+    crate.metadata.write(crate_root)
+    return crate_root / "ro-crate-metadata.json"
