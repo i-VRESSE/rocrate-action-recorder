@@ -6,9 +6,8 @@ Calling the script with
 
 Would generate a [ro-crate-metadata.json](ro-crate-metadata.json) file.
 
-# Validate
+# Validate the RO-Crate
 
 ```shell
-uvx --from roc-validator rocrate-validator validate -m -v --output-format json --output-file 
-report.json
+uvx --from roc-validator rocrate-validator validate -m -v --output-format json --output-file report.json
 ```

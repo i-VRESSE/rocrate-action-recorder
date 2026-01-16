@@ -16,9 +16,13 @@
             "@type": [
                 "Dataset"
             ],
+            "name": "myscript.py actions",
+            "description": "Calls to mypscript.py recorded as RO-Crate metadata.",
+            "license": "CC-BY-4.0",
+            "datePublished": "2026-01-16",
             "hasPart": [
                 {
-                    "@id": "datata/input.txt"
+                    "@id": "data/input.txt"
                 },
                 {
                     "@id": "results/output.txt"

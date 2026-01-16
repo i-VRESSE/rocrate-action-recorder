@@ -13,7 +13,7 @@ def handler(args):
     # do something simple
     args.output.write_text(args.input.read_text().upper())
 
-    # TODO call recorder here
+    # TODO call recorder here like rocrate_action_recorder.record(...)
 
 def main():
     parser = make_parser()
