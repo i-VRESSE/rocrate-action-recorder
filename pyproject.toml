@@ -1,0 +1,17 @@
+[project]
+name = "rocrate-action-recorder"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Stefan Verhoeven", email = "stefan.verhoeven@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = []
+
+[project.scripts]
+rocrate-action-recorder = "rocrate_action_recorder:main"
+
+[build-system]
+requires = ["uv_build>=0.9.13,<0.10.0"]
+build-backend = "uv_build"
