@@ -157,13 +157,17 @@ def record(
         )
 
     software = None
+    # Use versioned identifier if version is provided
+    software_id = (
+        f"{program_name}@{software_version}" if software_version else program_name
+    )
     if callable(get_entity):
-        software = get_entity(program_name)
+        software = get_entity(software_id)
     if software is None:
         software = crate.add(
             SoftwareApplication(
                 crate,
-                program_name,
+                software_id,
                 properties={
                     "name": program_name,
                     "description": program_description,

@@ -18,4 +18,8 @@ parser.add_argument(
     )
 ```
 
-See https://www.researchobject.org/ro-crate/specification/1.1/data-entities.html#directory-file-entity how to store directories in RO-Crate.
+Use `crate.add_directory()` to add directories to the RO-Crate.
+
+See https://www.researchobject.org/ro-crate/specification/1.1/data-entities.html#directory-file-entity for more info.
+
+The caller of `record` function needs to supply what inputs and outputs are directories or files.

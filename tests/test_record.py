@@ -92,7 +92,7 @@ def test_record_happy_path_valid_crate(tmp_path, parser):
         },
         {"@id": "test_user", "@type": "Person", "name": "test_user"},
         {
-            "@id": "myscript",
+            "@id": "myscript@1.0.0",
             "@type": "SoftwareApplication",
             "name": "myscript",
             "description": "Example CLI",
@@ -104,7 +104,7 @@ def test_record_happy_path_valid_crate(tmp_path, parser):
             "name": "Example CLI",
             "startTime": "2026-01-16T12:00:00",
             "object": [{"@id": "data/input.txt"}],
-            "instrument": {"@id": "myscript"},
+            "instrument": {"@id": "myscript@1.0.0"},
             "endTime": "2026-01-16T12:00:05",
             "result": [{"@id": "results/output.txt"}],
             "agent": {"@id": "test_user"},
@@ -344,7 +344,7 @@ def test_record_dedup_person_and_softwareapplication(tmp_path, parser):
 
 def test_file_reuse_in_chain(tmp_path, parser):
     """Test that a file reused across multiple commands appears once in RO-Crate.
-    
+
     Simulates a chain of commands where the output of the first command becomes
     the input to the second command. Verifies that the reused file is not
     duplicated and that both CreateActions correctly reference it.
@@ -354,16 +354,16 @@ def test_file_reuse_in_chain(tmp_path, parser):
     results_dir = crate_dir / "results"
     data_dir.mkdir()
     results_dir.mkdir()
-    
+
     # Create input file for first command
     input_path = data_dir / "input.txt"
     input_path.write_text("Hello World\n", encoding="utf-8")
-    
+
     # Intermediate file (output of first command, input to second)
     intermediate_path = results_dir / "output.txt"
     # Final output of second command
     final_output_path = results_dir / "output2.txt"
-    
+
     # === FIRST COMMAND: input.txt → output.txt ===
     args1 = parser.parse_args(
         [
@@ -373,16 +373,16 @@ def test_file_reuse_in_chain(tmp_path, parser):
             str(intermediate_path),
         ]
     )
-    
+
     start_time_1 = datetime(2026, 1, 16, 12, 0, 0)
     end_time_1 = datetime(2026, 1, 16, 12, 0, 5)
     argv1 = ["myscript", "--input", str(input_path), "--output", str(intermediate_path)]
-    
+
     # Simulate first command execution
     intermediate_path.write_text(
         input_path.read_text(encoding="utf-8").upper(), encoding="utf-8"
     )
-    
+
     rocrate_action_recorder.record(
         args=ArgparseArguments(args1),
         inputs=["input"],
@@ -396,7 +396,7 @@ def test_file_reuse_in_chain(tmp_path, parser):
         software_version="1.0.0",
         dataset_license="CC-BY-4.0",
     )
-    
+
     # === SECOND COMMAND: output.txt → output2.txt ===
     # Note: second command only READS output.txt (doesn't modify it)
     args2 = parser.parse_args(
@@ -407,16 +407,22 @@ def test_file_reuse_in_chain(tmp_path, parser):
             str(final_output_path),
         ]
     )
-    
+
     start_time_2 = datetime(2026, 1, 16, 12, 1, 0)
     end_time_2 = datetime(2026, 1, 16, 12, 1, 3)
-    argv2 = ["myscript", "--input", str(intermediate_path), "--output", str(final_output_path)]
-    
+    argv2 = [
+        "myscript",
+        "--input",
+        str(intermediate_path),
+        "--output",
+        str(final_output_path),
+    ]
+
     # Simulate second command execution (just reverses the intermediate file)
     final_output_path.write_text(
         intermediate_path.read_text(encoding="utf-8")[::-1], encoding="utf-8"
     )
-    
+
     rocrate_action_recorder.record(
         args=ArgparseArguments(args2),
         inputs=["input"],
@@ -430,23 +436,23 @@ def test_file_reuse_in_chain(tmp_path, parser):
         software_version="1.0.0",
         dataset_license="CC-BY-4.0",
     )
-    
+
     # === VERIFY RO-CRATE ===
     crate_meta = crate_dir / "ro-crate-metadata.json"
     assert crate_meta.exists()
-    
+
     assert_crate_shape(crate_dir)
-    
+
     data = json.loads(crate_meta.read_text(encoding="utf-8"))
     entities = {e["@id"]: e for e in data["@graph"]}
-    
+
     # 1. Verify output.txt appears exactly once
     file_entities = [e for e in data["@graph"] if e.get("@type") == "File"]
     output_txt_entities = [e for e in file_entities if e["@id"] == "results/output.txt"]
     assert len(output_txt_entities) == 1, (
         f"output.txt should appear exactly once, found {len(output_txt_entities)}"
     )
-    
+
     # 2. Verify output.txt metadata
     output_txt_entity = output_txt_entities[0]
     expected_size = str(intermediate_path.stat().st_size)
@@ -454,7 +460,7 @@ def test_file_reuse_in_chain(tmp_path, parser):
     # Note: file name reflects its last role (input to second command)
     assert output_txt_entity["name"] == "Input file"
     assert output_txt_entity["encodingFormat"] == "text/plain"
-    
+
     # 3. Verify first CreateAction
     action1_id = f"myscript --input {input_path} --output {intermediate_path}"
     action1 = entities[action1_id]
@@ -462,14 +468,14 @@ def test_file_reuse_in_chain(tmp_path, parser):
     assert action1["startTime"] == "2026-01-16T12:00:00"
     assert action1["endTime"] == "2026-01-16T12:00:05"
     assert action1["agent"]["@id"] == "test_user"
-    assert action1["instrument"]["@id"] == "myscript"
-    
+    assert action1["instrument"]["@id"] == "myscript@1.0.0"
+
     # Check inputs and outputs reference correct files
     action1_object_ids = [obj["@id"] for obj in action1["object"]]
     action1_result_ids = [res["@id"] for res in action1["result"]]
     assert action1_object_ids == ["data/input.txt"]
     assert action1_result_ids == ["results/output.txt"]
-    
+
     # 4. Verify second CreateAction
     action2_id = f"myscript --input {intermediate_path} --output {final_output_path}"
     action2 = entities[action2_id]
@@ -477,8 +483,8 @@ def test_file_reuse_in_chain(tmp_path, parser):
     assert action2["startTime"] == "2026-01-16T12:01:00"
     assert action2["endTime"] == "2026-01-16T12:01:03"
     assert action2["agent"]["@id"] == "test_user"
-    assert action2["instrument"]["@id"] == "myscript"
-    
+    assert action2["instrument"]["@id"] == "myscript@1.0.0"
+
     # Check inputs and outputs reference correct files
     action2_object_ids = [obj["@id"] for obj in action2["object"]]
     action2_result_ids = [res["@id"] for res in action2["result"]]
@@ -486,13 +492,13 @@ def test_file_reuse_in_chain(tmp_path, parser):
         f"Second action should reference results/output.txt as input, got {action2_object_ids}"
     )
     assert action2_result_ids == ["results/output2.txt"]
-    
+
     # 5. Verify Person and SoftwareApplication are de-duplicated
     persons = [e for e in data["@graph"] if e.get("@type") == "Person"]
     softwares = [e for e in data["@graph"] if e.get("@type") == "SoftwareApplication"]
     assert len(persons) == 1
     assert len(softwares) == 1
-    
+
     # 6. Verify Dataset has all three files in hasPart
     dataset = entities["./"]
     has_part_ids = {p["@id"] for p in dataset.get("hasPart", [])}
@@ -501,3 +507,139 @@ def test_file_reuse_in_chain(tmp_path, parser):
         "results/output.txt",
         "results/output2.txt",
     }
+
+
+def test_record_adds_new_software_on_version_change(tmp_path, parser):
+    """Test that different software versions are recorded as separate SoftwareApplication entities.
+
+    Simulates two runs with the same script but different versions.
+    Verifies that:
+    - Two SoftwareApplication entities are created with versioned identifiers (name@version)
+    - Each CreateAction references the correct SoftwareApplication version
+    - Files and Person are still deduplicated appropriately
+    """
+    crate_dir = tmp_path
+    data_dir = crate_dir / "data"
+    results_dir = crate_dir / "results"
+    data_dir.mkdir()
+    results_dir.mkdir()
+
+    input_path_1 = data_dir / "input.txt"
+    output_path_1 = results_dir / "output.txt"
+    input_path_1.write_text("Hello World\n", encoding="utf-8")
+
+    # === FIRST RUN: version 1.0.0 ===
+    args_1 = parser.parse_args(
+        [
+            "--input",
+            str(input_path_1),
+            "--output",
+            str(output_path_1),
+        ]
+    )
+
+    start_time_1 = datetime(2026, 1, 16, 12, 0, 0)
+    end_time_1 = datetime(2026, 1, 16, 12, 0, 5)
+    argv_1 = ["myscript", "--input", str(input_path_1), "--output", str(output_path_1)]
+
+    output_path_1.write_text(
+        input_path_1.read_text(encoding="utf-8").upper(), encoding="utf-8"
+    )
+
+    rocrate_action_recorder.record(
+        args=ArgparseArguments(args_1),
+        inputs=["input"],
+        outputs=["output"],
+        parser=ArgparseRecorder(parser),
+        start_time=start_time_1,
+        crate_dir=crate_dir,
+        argv=argv_1,
+        end_time=end_time_1,
+        current_user="test_user",
+        software_version="1.0.0",
+        dataset_license="CC-BY-4.0",
+    )
+
+    # === SECOND RUN: version 2.0.0, different input/output ===
+    input_path_2 = data_dir / "input2.txt"
+    output_path_2 = results_dir / "output2.txt"
+    input_path_2.write_text("Hello Again\n", encoding="utf-8")
+
+    args_2 = parser.parse_args(
+        [
+            "--input",
+            str(input_path_2),
+            "--output",
+            str(output_path_2),
+        ]
+    )
+
+    start_time_2 = datetime(2026, 1, 16, 13, 0, 0)
+    end_time_2 = datetime(2026, 1, 16, 13, 0, 5)
+    argv_2 = ["myscript", "--input", str(input_path_2), "--output", str(output_path_2)]
+
+    output_path_2.write_text(
+        input_path_2.read_text(encoding="utf-8").upper(), encoding="utf-8"
+    )
+
+    rocrate_action_recorder.record(
+        args=ArgparseArguments(args_2),
+        inputs=["input"],
+        outputs=["output"],
+        parser=ArgparseRecorder(parser),
+        start_time=start_time_2,
+        crate_dir=crate_dir,
+        argv=argv_2,
+        end_time=end_time_2,
+        current_user="test_user",
+        software_version="2.0.0",
+        dataset_license="CC-BY-4.0",
+    )
+
+    # === VERIFY RO-CRATE ===
+    crate_meta = crate_dir / "ro-crate-metadata.json"
+    assert crate_meta.exists()
+
+    assert_crate_shape(crate_dir)
+
+    data = json.loads(crate_meta.read_text(encoding="utf-8"))
+    entities = {e["@id"]: e for e in data["@graph"]}
+
+    # Verify both software versions exist with versioned identifiers
+    softwares = [e for e in data["@graph"] if e.get("@type") == "SoftwareApplication"]
+    assert len(softwares) == 2, (
+        f"Expected 2 SoftwareApplication entities, found {len(softwares)}"
+    )
+
+    software_ids = {s["@id"] for s in softwares}
+    assert software_ids == {"myscript@1.0.0", "myscript@2.0.0"}, (
+        f"Expected versioned identifiers myscript@1.0.0 and myscript@2.0.0, got {software_ids}"
+    )
+
+    # Verify each SoftwareApplication has correct version property
+    software_1_0 = entities["myscript@1.0.0"]
+    assert software_1_0["version"] == "1.0.0"
+    assert software_1_0["name"] == "myscript"
+    assert software_1_0["description"] == "Example CLI"
+
+    software_2_0 = entities["myscript@2.0.0"]
+    assert software_2_0["version"] == "2.0.0"
+    assert software_2_0["name"] == "myscript"
+    assert software_2_0["description"] == "Example CLI"
+
+    # Verify first CreateAction references version 1.0.0
+    action_1_id = f"myscript --input {input_path_1} --output {output_path_1}"
+    action_1 = entities[action_1_id]
+    assert action_1["instrument"]["@id"] == "myscript@1.0.0"
+    assert action_1["startTime"] == "2026-01-16T12:00:00"
+
+    # Verify second CreateAction references version 2.0.0
+    action_2_id = f"myscript --input {input_path_2} --output {output_path_2}"
+    action_2 = entities[action_2_id]
+    assert action_2["instrument"]["@id"] == "myscript@2.0.0"
+    assert action_2["startTime"] == "2026-01-16T13:00:00"
+
+    # Verify Person is still deduplicated
+    persons = [e for e in data["@graph"] if e.get("@type") == "Person"]
+    assert len(persons) == 1
+    assert persons[0]["@id"] == "test_user"
