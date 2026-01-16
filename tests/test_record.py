@@ -144,3 +144,182 @@ def test_record_happy_path_valid_crate(tmp_path, parser):
             f"Expected: {expected_entity}\n"
             f"Actual: {actual_entity}"
         )
+
+
+def test_record_updates_existing_action_and_files_on_repeat_command(tmp_path, parser):
+    crate_dir = tmp_path
+    data_dir = crate_dir / "data"
+    results_dir = crate_dir / "results"
+    data_dir.mkdir()
+    results_dir.mkdir()
+
+    input_path = data_dir / "input.txt"
+    output_path = results_dir / "output.txt"
+
+    # First run content
+    input_path.write_text("Hello World\n", encoding="utf-8")
+
+    args = parser.parse_args([
+        "--input",
+        str(input_path),
+        "--output",
+        str(output_path),
+    ])
+
+    start_time_1 = datetime(2026, 1, 16, 12, 0, 0)
+    end_time_1 = datetime(2026, 1, 16, 12, 0, 5)
+
+    # Simulate run work
+    output_path.write_text(input_path.read_text(encoding="utf-8").upper(), encoding="utf-8")
+
+    argv = [
+        "myscript",
+        "--input",
+        str(input_path),
+        "--output",
+        str(output_path),
+    ]
+
+    crate_meta_1 = rocrate_action_recorder.record(
+        args=args,
+        inputs=["input"],
+        outputs=["output"],
+        parser=parser,
+        start_time=start_time_1,
+        crate_dir=crate_dir,
+        argv=argv,
+        end_time=end_time_1,
+        current_user="test_user",
+        software_version="1.0.0",
+        dataset_license="CC-BY-4.0",
+    )
+
+    assert crate_meta_1.exists()
+
+    # Second run with changed sizes and times
+    input_path.write_text("Hello World!!!\n", encoding="utf-8")
+    output_path.write_text(input_path.read_text(encoding="utf-8").upper(), encoding="utf-8")
+
+    start_time_2 = datetime(2026, 1, 16, 13, 0, 0)
+    end_time_2 = datetime(2026, 1, 16, 13, 0, 7)
+
+    crate_meta_2 = rocrate_action_recorder.record(
+        args=args,
+        inputs=["input"],
+        outputs=["output"],
+        parser=parser,
+        start_time=start_time_2,
+        crate_dir=crate_dir,
+        argv=argv,
+        end_time=end_time_2,
+        current_user="test_user",
+        software_version="1.0.0",
+        dataset_license="CC-BY-4.0",
+    )
+
+    assert crate_meta_2.exists()
+    assert_crate_shape(crate_dir)
+
+    data = json.loads(crate_meta_2.read_text(encoding="utf-8"))
+    entities = {e["@id"]: e for e in data["@graph"]}
+
+    action_id = f"myscript --input {input_path} --output {output_path}"
+    assert action_id in entities
+
+    # Ensure there is exactly one action with that id and it has updated times
+    action_entity = entities[action_id]
+    assert action_entity["startTime"] == "2026-01-16T13:00:00"
+    assert action_entity["endTime"] == "2026-01-16T13:00:07"
+
+    # Files should be de-duplicated and have updated sizes
+    assert entities["data/input.txt"]["contentSize"] == str((data_dir / "input.txt").stat().st_size)
+    assert entities["results/output.txt"]["contentSize"] == str((results_dir / "output.txt").stat().st_size)
+
+    # Person and SoftwareApplication should be unique
+    persons = [e for e in data["@graph"] if e.get("@type") == "Person"]
+    softwares = [e for e in data["@graph"] if e.get("@type") == "SoftwareApplication"]
+    assert len(persons) == 1
+    assert len(softwares) == 1
+
+    # Root dataset hasPart should list each file once
+    dataset = entities["./"]
+    has_part_ids = {p["@id"] for p in dataset.get("hasPart", [])}
+    assert has_part_ids == {"data/input.txt", "results/output.txt"}
+
+
+def test_record_rejects_paths_outside_crate_root(tmp_path, parser):
+    crate_dir = tmp_path
+    # make inside results dir but outside data file
+    (crate_dir / "results").mkdir()
+    outside = crate_dir.parent / "outside.txt"
+    outside.write_text("data", encoding="utf-8")
+    inside_output = crate_dir / "results" / "output.txt"
+
+    args = parser.parse_args([
+        "--input",
+        str(outside),
+        "--output",
+        str(inside_output),
+    ])
+
+    with pytest.raises(ValueError):
+        rocrate_action_recorder.record(
+            args=args,
+            inputs=["input"],
+            outputs=["output"],
+            parser=parser,
+            start_time=datetime(2026, 1, 16, 12, 0, 0),
+            crate_dir=crate_dir,
+            argv=["myscript", "--input", str(outside), "--output", str(inside_output)],
+            end_time=datetime(2026, 1, 16, 12, 0, 5),
+            current_user="test_user",
+            software_version="1.0.0",
+            dataset_license="CC-BY-4.0",
+        )
+
+    assert not (crate_dir / "ro-crate-metadata.json").exists()
+
+
+def test_record_dedup_person_and_softwareapplication(tmp_path, parser):
+    crate_dir = tmp_path
+    data_dir = crate_dir / "data"
+    results_dir = crate_dir / "results"
+    data_dir.mkdir()
+    results_dir.mkdir()
+    input_path = data_dir / "input.txt"
+    output_path = results_dir / "output.txt"
+    input_path.write_text("Hello\n", encoding="utf-8")
+
+    args = parser.parse_args([
+        "--input",
+        str(input_path),
+        "--output",
+        str(output_path),
+    ])
+
+    argv = ["myscript", "--input", str(input_path), "--output", str(output_path)]
+
+    # Run twice
+    for i in range(2):
+        output_path.write_text(input_path.read_text(encoding="utf-8").upper(), encoding="utf-8")
+        rocrate_action_recorder.record(
+            args=args,
+            inputs=["input"],
+            outputs=["output"],
+            parser=parser,
+            start_time=datetime(2026, 1, 16, 12, 0, 0),
+            crate_dir=crate_dir,
+            argv=argv,
+            end_time=datetime(2026, 1, 16, 12, 0, 5),
+            current_user="test_user",
+            software_version="1.0.0",
+            dataset_license="CC-BY-4.0",
+        )
+
+    crate_meta = crate_dir / "ro-crate-metadata.json"
+    assert crate_meta.exists()
+    data = json.loads(crate_meta.read_text(encoding="utf-8"))
+    persons = [e for e in data["@graph"] if e.get("@type") == "Person"]
+    softwares = [e for e in data["@graph"] if e.get("@type") == "SoftwareApplication"]
+    assert len(persons) == 1
+    assert len(softwares) == 1

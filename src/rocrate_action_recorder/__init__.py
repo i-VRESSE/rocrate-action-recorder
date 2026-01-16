@@ -92,15 +92,16 @@ def record(
             software_version = None
 
     if end_time is None:
-        raise ValueError("end_time could not be determined")
+        end_time = datetime.now()
 
     def _relpath(path: Path) -> Path:
         path = Path(path)
         try:
-            rel = path.relative_to(crate_root)
-        except ValueError:
-            rel = Path(os.path.relpath(path, crate_root))
-        return rel
+            return path.relative_to(crate_root)
+        except ValueError as exc:
+            raise ValueError(
+                f"Path '{path}' is outside the crate root '{crate_root}'"
+            ) from exc
 
     def find_action(k: str):
         for action in parser._actions:
@@ -115,9 +116,25 @@ def record(
         rpath = _relpath(path)
         action_obj = find_action(o)
         name = action_obj.help if action_obj is not None else o
+        file_id = str(rpath)
+        existing = getattr(crate, "get", None)
+        entity = existing(file_id) if callable(existing) else None
+        if entity is not None:
+            size_str = str(path.stat().st_size)
+            props = getattr(entity, "properties", None)
+            if isinstance(props, dict):
+                props["name"] = name
+                props["contentSize"] = size_str
+                props["encodingFormat"] = "text/plain"
+            raw = getattr(entity, "_jsonld", None)
+            if isinstance(raw, dict):
+                raw["name"] = name
+                raw["contentSize"] = size_str
+                raw["encodingFormat"] = "text/plain"
+            return entity
         return crate.add_file(
             source=path,
-            dest_path=str(rpath),
+            dest_path=file_id,
             properties={
                 "name": name,
                 "contentSize": str(path.stat().st_size),
@@ -125,28 +142,39 @@ def record(
             },
         )
 
-    source = crate_root / "ro-crate-metadata.json"
-    if not source.exists():
-        source = None
-    crate = ROCrate(source)
+    metadata_file = crate_root / "ro-crate-metadata.json"
+    source_dir: Path | None = crate_root if metadata_file.exists() else None
+    crate = ROCrate(source_dir)
 
-    agent = crate.add(Person(crate, current_user, properties={"name": current_user}))
+    # De-duplicate Person and SoftwareApplication by @id if they already exist in the crate
+    get_entity = getattr(crate, "get", None)
+    agent = None
+    if callable(get_entity):
+        agent = get_entity(current_user)
+    if agent is None:
+        agent = crate.add(Person(crate, current_user, properties={"name": current_user}))
 
-    software = crate.add(
-        SoftwareApplication(
-            crate,
-            parser.prog,
-            properties={
-                "name": parser.prog,
-                "description": parser.description,
-                "version": software_version,
-            },
+    software = None
+    if callable(get_entity):
+        software = get_entity(parser.prog)
+    if software is None:
+        software = crate.add(
+            SoftwareApplication(
+                crate,
+                parser.prog,
+                properties={
+                    "name": parser.prog,
+                    "description": parser.description,
+                    "version": software_version,
+                },
+            )
         )
-    )
 
     objects = [to_file(o) for o in inputs]
     results = [to_file(o) for o in outputs]
 
+    # Update existing action with the same identifier, otherwise add a new one
+    # Always add the action; the RO-Crate library should upsert by identifier
     crate.add_action(
         instrument=software,
         identifier=action_id,
