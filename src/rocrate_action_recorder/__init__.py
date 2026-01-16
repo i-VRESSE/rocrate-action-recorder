@@ -1,4 +1,3 @@
-import argparse
 import getpass
 import importlib.metadata
 import os
@@ -10,10 +9,12 @@ from rocrate.rocrate import ROCrate
 from rocrate.model.person import Person
 from rocrate.model.softwareapplication import SoftwareApplication
 
+from .parser import Arguments, Parser
+
 
 def record(
-    args: argparse.Namespace,
-    parser: argparse.ArgumentParser,
+    args: Arguments,
+    parser: Parser,
     start_time: datetime,
     inputs: list[str] | None = None,
     outputs: list[str] | None = None,
@@ -33,12 +34,13 @@ def record(
     working directory).
 
     Args:
-        args: Parsed arguments for the CLI. The names in `inputs` and
-            `outputs` must correspond to attributes on this namespace that
-            point to files on disk.
-        parser: The argparse parser that defines the CLI. Its `prog` and
-            `description` populate crate metadata. Action `dest` names should
-            match the entries in `inputs`/`outputs`.
+        args: Parsed arguments from the CLI. The names in `inputs` and
+            `outputs` must correspond to argument names that point to files
+            on disk. Should implement the Arguments protocol.
+        parser: The CLI parser that defines the program. Its program name and
+            description populate crate metadata. Argument names should
+            match the entries in `inputs`/`outputs`. Should implement the
+            Parser protocol.
         start_time: Timestamp marking when the CLI execution began.
         inputs: Argument names to treat as inputs (e.g., "input"). Each must
             reference an existing file via `args`.
@@ -53,7 +55,8 @@ def record(
         current_user: Username recorded as the `Person` agent. Auto-detected
             if omitted.
         software_version: Version string for the `SoftwareApplication`.
-            Determined from installed metadata for `parser.prog` when possible.
+            Determined from installed metadata for the program name when
+            possible.
         dataset_license: License identifier to record on the top-level
             `Dataset`.
 
@@ -84,9 +87,12 @@ def record(
         except Exception:
             current_user = getpass.getuser()
 
+    program_name = parser.get_program_name()
+    program_description = parser.get_description()
+
     if software_version is None:
         try:
-            software_version = importlib.metadata.version(parser.prog)
+            software_version = importlib.metadata.version(program_name)
         except Exception:
             # TODO try to determine package from calller frame?
             software_version = None
@@ -103,19 +109,13 @@ def record(
                 f"Path '{path}' is outside the crate root '{crate_root}'"
             ) from exc
 
-    def find_action(k: str):
-        for action in parser._actions:
-            if action.dest == k:
-                return action
-        return None
-
     def to_file(o: str):
-        path = getattr(args, o, None)
+        path = args.get(o)
         if not isinstance(path, Path):
             raise ValueError(f"Expected Path for argument '{o}', got {type(path)}")
         rpath = _relpath(path)
-        action_obj = find_action(o)
-        name = action_obj.help if action_obj is not None else o
+        arg_obj = parser.find_argument(o)
+        name = arg_obj.help if arg_obj is not None else o
         file_id = str(rpath)
         existing = getattr(crate, "get", None)
         entity = existing(file_id) if callable(existing) else None
@@ -152,19 +152,21 @@ def record(
     if callable(get_entity):
         agent = get_entity(current_user)
     if agent is None:
-        agent = crate.add(Person(crate, current_user, properties={"name": current_user}))
+        agent = crate.add(
+            Person(crate, current_user, properties={"name": current_user})
+        )
 
     software = None
     if callable(get_entity):
-        software = get_entity(parser.prog)
+        software = get_entity(program_name)
     if software is None:
         software = crate.add(
             SoftwareApplication(
                 crate,
-                parser.prog,
+                program_name,
                 properties={
-                    "name": parser.prog,
-                    "description": parser.description,
+                    "name": program_name,
+                    "description": program_description,
                     "version": software_version,
                 },
             )
@@ -181,7 +183,7 @@ def record(
         object=objects,
         result=results,
         properties={
-            "name": parser.description or parser.prog,
+            "name": program_description or program_name,
             "startTime": start_time.isoformat(),
             "endTime": end_time.isoformat(),
             "agent": agent,
@@ -189,8 +191,8 @@ def record(
     )
 
     # Set root dataset properties
-    crate.name = f"{parser.prog} actions"
-    crate.description = parser.description or f"Calls to {parser.prog}"
+    crate.name = f"{program_name} actions"
+    crate.description = program_description or f"Calls to {program_name}"
     crate.datePublished = end_time.date()
     if dataset_license is not None:
         crate.license = dataset_license

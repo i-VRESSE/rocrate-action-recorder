@@ -3,6 +3,7 @@ import argparse
 from datetime import datetime
 from pathlib import Path
 import rocrate_action_recorder
+from rocrate_action_recorder.parser import ArgparseRecorder, ArgparseArguments
 
 
 def make_parser():
@@ -18,10 +19,10 @@ def handler(args, parser):
     args.output.write_text(args.input.read_text().upper())
 
     rocrate_action_recorder.record(
-        args=args,
+        args=ArgparseArguments(args),
         inputs=["input"],
         outputs=["output"],
-        parser=parser,
+        parser=ArgparseRecorder(parser),
         start_time=start_time,
     )
 
