@@ -6,6 +6,7 @@ other CLI frameworks without modification.
 """
 
 import argparse
+from pathlib import Path
 from typing import Any, Protocol
 
 
@@ -139,3 +140,49 @@ class ArgparseRecorder:
             if action.dest == name:
                 return ArgparseArgument(action)
         return None
+
+
+def _get_filename_from_arg(arg: Any) -> str | None:
+    """Extract filename from an argument value.
+
+    Handles string paths, Path objects, and file-like objects (e.g., from argparse.FileType).
+
+    Args:
+        arg: The argument value: string path, Path object, or file-like object.
+
+    Returns:
+        The filename as a string, or None if the argument represents stdin/stdout.
+
+    Raises:
+        ValueError: If the argument is not a valid type.
+    """
+    # Handle string paths
+    if isinstance(arg, str):
+        return arg
+
+    # Handle Path objects
+    if isinstance(arg, Path):
+        return str(arg)
+
+    # Handle file-like objects
+    if hasattr(arg, "name"):
+        filename = arg.name
+        if isinstance(filename, str):
+            # Skip stdin/stdout represented as '-' or '<stdin>'/'<stdout>'
+            if filename in ("-", "<stdin>", "<stdout>"):
+                return None
+            # Skip if it looks like a file descriptor or object representation
+            # e.g., '<_io.FileIO name=7 mode='rb+' closefd=True>'
+            if filename.startswith("<") and filename.endswith(">"):
+                return None
+            return filename
+        # If .name is an integer (file descriptor), it might be a closed file
+        # or a special file like stdin/stdout. We can't reliably determine
+        # what file it is, so skip it.
+        if isinstance(filename, int):
+            return None
+
+    raise ValueError(
+        f"Expected string path, Path object, or file-like object with .name attribute, "
+        f"got {type(arg).__name__}"
+    )

@@ -10,7 +10,7 @@ from rocrate.rocrate import ROCrate
 from rocrate.model.person import Person
 from rocrate.model.softwareapplication import SoftwareApplication
 
-from .parser import Arguments, Parser
+from .parser import Arguments, Parser, _get_filename_from_arg
 
 
 def record(
@@ -119,24 +119,50 @@ def record(
         return mime_type or "application/octet-stream"
 
     def _relpath(path: Path) -> Path:
-        path = Path(path)
+        path = Path(path).resolve()
+        crate_root_resolved = crate_root.resolve()
         try:
-            return path.relative_to(crate_root)
+            return path.relative_to(crate_root_resolved)
         except ValueError as exc:
             raise ValueError(
-                f"Path '{path}' is outside the crate root '{crate_root}'"
+                f"Path '{path}' is outside the crate root '{crate_root_resolved}'"
             ) from exc
 
-    def _get_path(arg_name: str) -> Path:
-        """Get and validate path from arguments."""
-        path = args.get(arg_name)
-        if not isinstance(path, Path):
-            raise ValueError(
-                f"Expected Path for argument '{arg_name}', got {type(path)}"
-            )
-        return path
+    def _get_path(arg_name: str) -> tuple[Path, Path] | tuple[None, None]:
+        """Get and validate path from arguments.
 
-    def _get_entity_name(arg_name: str) -> str |None:
+        Extracts filenames from file objects and converts all paths to be
+        relative to crate_root. Skips stdin/stdout (filename == '-').
+
+        Returns:
+            A tuple of (absolute_path, relative_path) or (None, None) for stdin/stdout.
+        """
+        arg_value = args.get(arg_name)
+        if arg_value is None:
+            raise ValueError(f"Argument '{arg_name}' not found")
+
+        # Extract filename from file objects or get string path
+        filename = _get_filename_from_arg(arg_value)
+
+        # Skip stdin/stdout
+        if filename is None:
+            return None, None
+
+        # Convert to Path and resolve to absolute
+        abs_path = Path(filename).resolve()
+        crate_root_resolved = crate_root.resolve()
+
+        # Make relative to crate_root
+        try:
+            rel_path = abs_path.relative_to(crate_root_resolved)
+        except ValueError as exc:
+            raise ValueError(
+                f"Path '{abs_path}' is outside the crate root '{crate_root_resolved}'"
+            ) from exc
+
+        return abs_path, rel_path
+
+    def _get_entity_name(arg_name: str) -> str | None:
         """Get display name for entity from argument help text."""
         arg_obj = parser.find_argument(arg_name)
         return arg_obj.help if arg_obj is not None else arg_name
@@ -151,16 +177,18 @@ def record(
             raw.update(updates)
 
     def to_file(o: str):
-        path = _get_path(o)
-        rpath = _relpath(path)
+        abs_path, rel_path = _get_path(o)
+        if abs_path is None:
+            # Skip stdin/stdout
+            return None
         name = _get_entity_name(o)
-        file_id = str(rpath)
+        file_id = str(rel_path)
         existing = getattr(crate, "get", None)
         entity = existing(file_id) if callable(existing) else None
         if entity is not None:
             props = {
-                    "contentSize": str(path.stat().st_size),
-                    "encodingFormat": _get_mime_type(path),
+                "contentSize": str(abs_path.stat().st_size),
+                "encodingFormat": _get_mime_type(abs_path),
             }
             if name:
                 props["name"] = name
@@ -170,27 +198,29 @@ def record(
             )
             return entity
         return crate.add_file(
-            source=path,
+            source=abs_path,
             dest_path=file_id,
             properties={
                 "name": name,
-                "contentSize": str(path.stat().st_size),
-                "encodingFormat": _get_mime_type(path),
+                "contentSize": str(abs_path.stat().st_size),
+                "encodingFormat": _get_mime_type(abs_path),
             },
         )
 
     def to_dir(o: str):
-        path = _get_path(o)
-        rpath = _relpath(path)
+        abs_path, rel_path = _get_path(o)
+        if abs_path is None:
+            # Skip stdin/stdout (shouldn't happen for directories, but be safe)
+            return None
         name = _get_entity_name(o)
-        dir_id = str(rpath)
+        dir_id = str(rel_path)
         existing = getattr(crate, "get", None)
         entity = existing(dir_id) if callable(existing) else None
         if entity is not None and name is not None:
             _update_entity_properties(entity, {"name": name})
             return entity
         return crate.add_directory(
-            source=path,
+            source=abs_path,
             dest_path=dir_id,
             properties={
                 "name": name,
@@ -236,6 +266,12 @@ def record(
 
     input_dir_ids = [to_dir(o) for o in input_dirs]
     output_dir_ids = [to_dir(o) for o in output_dirs]
+
+    # Filter out None values (from stdin/stdout)
+    input_file_ids = [x for x in input_file_ids if x is not None]
+    output_file_ids = [x for x in output_file_ids if x is not None]
+    input_dir_ids = [x for x in input_dir_ids if x is not None]
+    output_dir_ids = [x for x in output_dir_ids if x is not None]
 
     all_inputs = input_file_ids + input_dir_ids
     all_outputs = output_file_ids + output_dir_ids

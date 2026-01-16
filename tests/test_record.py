@@ -643,3 +643,206 @@ def test_record_adds_new_software_on_version_change(tmp_path, parser):
     persons = [e for e in data["@graph"] if e.get("@type") == "Person"]
     assert len(persons) == 1
     assert persons[0]["@id"] == "test_user"
+
+
+def test_record_with_filetype_argument(tmp_path):
+    """Test that record() works with argparse.FileType arguments."""
+    crate_dir = tmp_path
+    data_dir = crate_dir / "data"
+    results_dir = crate_dir / "results"
+    data_dir.mkdir()
+    results_dir.mkdir()
+    input_path = data_dir / "input.txt"
+    output_path = results_dir / "output.txt"
+    input_path.write_text("Hello World\n")
+
+    parser = argparse.ArgumentParser(prog="myscript", description="Example CLI")
+    parser.add_argument("--input", type=argparse.FileType("r"), help="Input file")
+    parser.add_argument("--output", type=argparse.FileType("w"), help="Output file")
+
+    # Parse arguments - FileType opens the files
+    args = parser.parse_args(
+        [
+            "--input",
+            str(input_path),
+            "--output",
+            str(output_path),
+        ]
+    )
+
+    # Simulate writing to output file
+    args.output.write(args.input.read().upper())
+    args.input.close()
+    args.output.close()
+
+    start_time = datetime(2026, 1, 16, 12, 0, 0)
+    end_time = datetime(2026, 1, 16, 12, 0, 5)
+
+    crate_meta = rocrate_action_recorder.record(
+        args=ArgparseArguments(args),
+        input_files=["input"],
+        output_files=["output"],
+        parser=ArgparseRecorder(parser),
+        start_time=start_time,
+        crate_dir=crate_dir,
+        argv=["myscript", "--input", str(input_path), "--output", str(output_path)],
+        end_time=end_time,
+        current_user="test_user",
+        software_version="1.0.0",
+    )
+
+    assert crate_meta.exists()
+    assert_crate_shape(crate_dir)
+
+    # Verify the entities were created with correct relative paths
+    data = json.loads(crate_meta.read_text(encoding="utf-8"))
+    entities = {entity["@id"]: entity for entity in data["@graph"]}
+
+    # Check that files are recorded
+    assert "data/input.txt" in entities
+    assert "results/output.txt" in entities
+    assert entities["data/input.txt"]["@type"] == "File"
+    assert entities["results/output.txt"]["@type"] == "File"
+
+
+def test_record_with_filetype_stdout_skipped(tmp_path):
+    """Test that stdin/stdout (filename '-') are skipped."""
+    crate_dir = tmp_path
+    data_dir = crate_dir / "data"
+    data_dir.mkdir()
+    input_path = data_dir / "input.txt"
+    input_path.write_text("Hello World\n")
+
+    parser = argparse.ArgumentParser(prog="myscript", description="Example CLI")
+    parser.add_argument("--input", type=argparse.FileType("r"), help="Input file")
+    parser.add_argument(
+        "--output", type=argparse.FileType("w"), help="Output to stdout"
+    )
+
+    # Parse with stdout (dash) as output
+    args = parser.parse_args(
+        [
+            "--input",
+            str(input_path),
+            "--output",
+            "-",
+        ]
+    )
+
+    # Simulate writing to stdout
+    args.output.write(args.input.read().upper())
+    args.input.close()
+    # Don't close args.output because it's sys.stdout
+
+    start_time = datetime(2026, 1, 16, 12, 0, 0)
+    end_time = datetime(2026, 1, 16, 12, 0, 5)
+
+    crate_meta = rocrate_action_recorder.record(
+        args=ArgparseArguments(args),
+        input_files=["input"],
+        output_files=["output"],
+        parser=ArgparseRecorder(parser),
+        start_time=start_time,
+        crate_dir=crate_dir,
+        argv=["myscript", "--input", str(input_path), "--output", "-"],
+        end_time=end_time,
+        current_user="test_user",
+        software_version="1.0.0",
+    )
+
+    assert crate_meta.exists()
+
+    # Verify input is recorded but output (stdout) is not
+    data = json.loads(crate_meta.read_text(encoding="utf-8"))
+    entities = {entity["@id"]: entity for entity in data["@graph"]}
+
+    assert "data/input.txt" in entities
+    # Should not have stdout in the entities
+    assert "-" not in [e["@id"] for e in data["@graph"]]
+
+
+def test_record_with_filetype_outside_crate_raises_error(tmp_path):
+    """Test that files outside crate_dir raise an error."""
+    crate_dir = tmp_path / "crate"
+    crate_dir.mkdir()
+
+    # Create input file outside the crate
+    outside_dir = tmp_path / "outside"
+    outside_dir.mkdir()
+    outside_file = outside_dir / "input.txt"
+    outside_file.write_text("Hello World\n")
+
+    parser = argparse.ArgumentParser(prog="myscript", description="Example CLI")
+    parser.add_argument("--input", type=argparse.FileType("r"), help="Input file")
+
+    args = parser.parse_args(["--input", str(outside_file)])
+
+    start_time = datetime(2026, 1, 16, 12, 0, 0)
+
+    with pytest.raises(ValueError, match="is outside the crate root"):
+        rocrate_action_recorder.record(
+            args=ArgparseArguments(args),
+            input_files=["input"],
+            parser=ArgparseRecorder(parser),
+            start_time=start_time,
+            crate_dir=crate_dir,
+            current_user="test_user",
+        )
+
+    args.input.close()
+
+
+def test_record_with_filetype_binary_mode(tmp_path):
+    """Test that record() works with binary mode FileType."""
+    crate_dir = tmp_path
+    data_dir = crate_dir / "data"
+    results_dir = crate_dir / "results"
+    data_dir.mkdir()
+    results_dir.mkdir()
+    input_path = data_dir / "input.bin"
+    output_path = results_dir / "output.bin"
+    input_path.write_bytes(b"\x00\x01\x02\x03")
+
+    parser = argparse.ArgumentParser(prog="myscript", description="Example CLI")
+    parser.add_argument("--input", type=argparse.FileType("rb"), help="Input file")
+    parser.add_argument("--output", type=argparse.FileType("wb"), help="Output file")
+
+    args = parser.parse_args(
+        [
+            "--input",
+            str(input_path),
+            "--output",
+            str(output_path),
+        ]
+    )
+
+    # Copy binary data
+    args.output.write(args.input.read())
+    args.input.close()
+    args.output.close()
+
+    start_time = datetime(2026, 1, 16, 12, 0, 0)
+    end_time = datetime(2026, 1, 16, 12, 0, 5)
+
+    crate_meta = rocrate_action_recorder.record(
+        args=ArgparseArguments(args),
+        input_files=["input"],
+        output_files=["output"],
+        parser=ArgparseRecorder(parser),
+        start_time=start_time,
+        crate_dir=crate_dir,
+        argv=["myscript", "--input", str(input_path), "--output", str(output_path)],
+        end_time=end_time,
+        current_user="test_user",
+        software_version="1.0.0",
+    )
+
+    assert crate_meta.exists()
+    assert_crate_shape(crate_dir)
+
+    # Verify the binary files are recorded
+    data = json.loads(crate_meta.read_text(encoding="utf-8"))
+    entities = {entity["@id"]: entity for entity in data["@graph"]}
+
+    assert "data/input.bin" in entities
+    assert "results/output.bin" in entities
