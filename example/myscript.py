@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 import argparse
+from datetime import datetime
 from pathlib import Path
+import rocrate_action_recorder
 
 
 def make_parser():
@@ -9,16 +11,23 @@ def make_parser():
     parser.add_argument("--output", type=Path, help="Output file")
     return parser
 
-def handler(args):
+def handler(args, parser):
+    start_time = datetime.now()
     # do something simple
     args.output.write_text(args.input.read_text().upper())
 
-    # TODO call recorder here like rocrate_action_recorder.record(...)
+    rocrate_action_recorder.record(
+        args=args,
+        inputs=['input'],
+        outputs=['output'],
+        parser=parser,
+        start_time=start_time,
+    )
 
 def main():
     parser = make_parser()
     args = parser.parse_args()
-    handler(args)
+    handler(args, parser)
 
 if __name__ == "__main__":
     main()

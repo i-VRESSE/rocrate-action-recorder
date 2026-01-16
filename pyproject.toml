@@ -6,12 +6,31 @@ readme = "README.md"
 authors = [
     { name = "Stefan Verhoeven", email = "stefan.verhoeven@gmail.com" }
 ]
-requires-python = ">=3.13"
+requires-python = ">=3.14"
 dependencies = []
-
-[project.scripts]
-rocrate-action-recorder = "rocrate_action_recorder:main"
 
 [build-system]
 requires = ["uv_build>=0.9.13,<0.10.0"]
 build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+    "pytest-cov>=7.0.0",
+    "roc-validator>=0.8.0",
+]
+
+[tool.pytest]
+minversion = "9.0"
+addopts = ["-ra", "--showlocals"]
+strict = true
+filterwarnings = [
+  "error",
+]
+log_level = "INFO"
+testpaths = [
+  "tests",
+]
+
+[tool.coverage]
+run.source = ["src"]

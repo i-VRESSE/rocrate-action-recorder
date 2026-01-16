@@ -1,2 +1,4 @@
-def main() -> None:
-    print("Hello from rocrate-action-recorder!")
+
+
+def record():
+    raise NotImplementedError("This is a placeholder for the record function.")
