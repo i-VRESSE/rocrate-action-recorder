@@ -380,10 +380,43 @@ def _record_run(
     source_dir: Path | None = crate_root if metadata_file.exists() else None
     crate = ROCrate(source_dir)
 
+    _update_crate(
+        crate=crate,
+        crate_root=crate_root,
+        program=program,
+        software_version=software_version,
+        ioargs=ioargs,
+        action_id=action_id,
+        start_time=start_time,
+        end_time=end_time,
+        current_user=current_user,
+        dataset_license=dataset_license,
+    )
+
+    crate.metadata.write(crate_root)
+    return metadata_file
+
+
+def _update_crate(
+    crate: ROCrate,
+    crate_root: Path,
+    program: Program,
+    software_version: str,
+    ioargs: IOArgs,
+    action_id: str,
+    start_time: datetime,
+    end_time: datetime,
+    current_user: str,
+    dataset_license: str | None,
+) -> ROCrate:
     software = add_sofware_application(crate, program, software_version)
 
-    all_inputs = add_files(crate, crate_root, ioargs.input_files) + add_dirs(crate, crate_root, ioargs.input_dirs)
-    all_outputs = add_files(crate, crate_root, ioargs.output_files) + add_dirs(crate, crate_root, ioargs.output_dirs)
+    all_inputs = add_files(crate, crate_root, ioargs.input_files) + add_dirs(
+        crate, crate_root, ioargs.input_dirs
+    )
+    all_outputs = add_files(crate, crate_root, ioargs.output_files) + add_dirs(
+        crate, crate_root, ioargs.output_dirs
+    )
 
     agent = add_agent(crate, current_user)
 
@@ -401,6 +434,4 @@ def _record_run(
     if dataset_license:
         crate.license = dataset_license
     crate.datePublished = end_time
-
-    crate.metadata.write(crate_root)
-    return metadata_file
+    return crate
