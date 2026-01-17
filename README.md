@@ -1,6 +1,11 @@
 # rocrate-action-recorder
 
-Records calls of cli commands into a [Research Object Crate (RO-Crate)](https://www.researchobject.org/ro-crate/).
+[![Lint](https://github.com/protein-detective/rocrate-action-recorder/actions/workflows/ci.yml/badge.svg?job=lint)](https://github.com/protein-detective/rocrate-action-recorder/actions/workflows/ci.yml)
+[![Tests](https://github.com/protein-detective/rocrate-action-recorder/actions/workflows/ci.yml/badge.svg?job=tests)](https://github.com/protein-detective/rocrate-action-recorder/actions/workflows/ci.yml)
+[![Type Check](https://github.com/protein-detective/rocrate-action-recorder/actions/workflows/ci.yml/badge.svg?job=typecheck)](https://github.com/protein-detective/rocrate-action-recorder/actions/workflows/ci.yml)
+[![Build Package](https://github.com/protein-detective/rocrate-action-recorder/actions/workflows/ci.yml/badge.svg?job=build)](https://github.com/protein-detective/rocrate-action-recorder/actions/workflows/ci.yml)
+
+Python package to record calls of Python CLI commands into a [Research Object Crate (RO-Crate)](https://www.researchobject.org/ro-crate/).
 
 Supports [RO-Crate 1.1](https://www.researchobject.org/ro-crate/specification/1.1/index.html) specification..
 
