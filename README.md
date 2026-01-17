@@ -39,3 +39,6 @@ Will generate a `ro-crate-metadata.json` file in the current working directory d
 
 See the [example](example/) folder for a minimal example.
 
+### Contributions
+
+See [AGENTS.md](AGENTS.md) for commands and hints for contributions.

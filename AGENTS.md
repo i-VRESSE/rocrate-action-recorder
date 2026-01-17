@@ -5,6 +5,8 @@ uv sync                  # Install all dependencies
 uv run pytest            # Run all tests
 uvx ruff format          # Format code
 uvx ruff check           # Check for issues
+uv run pyright           # Type check code
+uv build                 # Build package
 ```
 
 ## Style

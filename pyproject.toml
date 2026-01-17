@@ -17,6 +17,13 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
+  {include-group = "typecheck"},
+  {include-group = "test"}
+]
+typecheck = [
+    "pyright>=1.1.408",
+]
+test = [
     "pytest>=9.0.2",
     "pytest-cov>=7.0.0",
     "roc-validator>=0.8.0",
@@ -35,3 +42,8 @@ testpaths = [
 
 [tool.coverage]
 run.source = ["src"]
+
+[tool.pyright]
+include = ['src']
+pythonVersion = "3.14"
+pythonPlatform = "Linux"

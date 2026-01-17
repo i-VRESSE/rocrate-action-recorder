@@ -38,10 +38,10 @@ class Info:
 
 @dataclass
 class IOs:
-    input_files: list[str] = field(default_factory=list)
-    output_files: list[str] = field(default_factory=list)
-    input_dirs: list[str] = field(default_factory=list)
-    output_dirs: list[str] = field(default_factory=list)
+    input_files: list[str] = field(default_factory=list[str])
+    output_files: list[str] = field(default_factory=list[str])
+    input_dirs: list[str] = field(default_factory=list[str])
+    output_dirs: list[str] = field(default_factory=list[str])
 
 
 @dataclass
@@ -194,8 +194,6 @@ def record(
             current_user = pwd.getpwuid(os.getuid()).pw_name
         except (KeyError, OSError, AttributeError):
             current_user = getpass.getuser()
-    if current_user is None:
-        raise ValueError("Could not determine current user")
 
     if end_time is None:
         end_time = datetime.now()
