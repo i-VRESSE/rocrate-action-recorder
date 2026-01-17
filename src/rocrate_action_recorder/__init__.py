@@ -63,10 +63,10 @@ def argparse_value2path(v: Any) -> Path | None:
     path = None
     if isinstance(v, Path):
         path = v
-    elif isinstance(v, str):
-        path = Path(v)
     elif hasattr(v, "name"):
         path = Path(v.name)
+    elif isinstance(v, str):
+        path = Path(v)
     # TODO handle nargs aka lists of paths
     return path
 
