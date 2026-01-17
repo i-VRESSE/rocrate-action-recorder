@@ -1,9 +1,8 @@
 # rocrate-action-recorder
 
-[![Lint](https://github.com/protein-detective/rocrate-action-recorder/actions/workflows/ci.yml/badge.svg?job=lint)](https://github.com/protein-detective/rocrate-action-recorder/actions/workflows/ci.yml)
-[![Tests](https://github.com/protein-detective/rocrate-action-recorder/actions/workflows/ci.yml/badge.svg?job=tests)](https://github.com/protein-detective/rocrate-action-recorder/actions/workflows/ci.yml)
-[![Type Check](https://github.com/protein-detective/rocrate-action-recorder/actions/workflows/ci.yml/badge.svg?job=typecheck)](https://github.com/protein-detective/rocrate-action-recorder/actions/workflows/ci.yml)
-[![Build Package](https://github.com/protein-detective/rocrate-action-recorder/actions/workflows/ci.yml/badge.svg?job=build)](https://github.com/protein-detective/rocrate-action-recorder/actions/workflows/ci.yml)
+[![github repo badge](https://img.shields.io/badge/github-repo-000.svg?logo=github&labelColor=gray&color=blue)](https://github.com/i-VRESSE/rocrate-action-recorder)
+[![github license badge](https://img.shields.io/github/license/i-VRESSE/rocrate-action-recorder)](https://github.com/i-VRESSE/rocrate-action-recorder)
+[![CI](https://github.com/i-VRESSE/rocrate-action-recorder/actions/workflows/ci.yml/badge.svg)](https://github.com/i-VRESSE/rocrate-action-recorder/actions/workflows/ci.yml)
 
 Python package to record calls of Python CLI commands into a [Research Object Crate (RO-Crate)](https://www.researchobject.org/ro-crate/).
 
