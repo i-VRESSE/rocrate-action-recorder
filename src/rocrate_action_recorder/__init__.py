@@ -250,7 +250,8 @@ def add_sofware_application(
 ) -> SoftwareApplication:
     software_app = build_software_application(crate, program, software_version)
     sa = crate.get(software_app.id)
-    same_version = sa and sa.properties.get("version") == software_version
+    props = sa.properties if sa and isinstance(sa.properties, dict) else {}
+    same_version = sa and props.get("version") == software_version
     if not same_version:
         crate.add(software_app)
     return software_app
