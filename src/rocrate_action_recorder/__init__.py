@@ -243,7 +243,7 @@ def build_software_application(
     return software_app
 
 
-def add_sofware_application(
+def add_software_application(
     crate: ROCrate, program: Program, software_version: str
 ) -> SoftwareApplication:
     software_app = build_software_application(crate, program, software_version)
@@ -407,7 +407,7 @@ def _update_crate(
     current_user: str,
     dataset_license: str | None,
 ) -> ROCrate:
-    software = add_sofware_application(crate, program, software_version)
+    software = add_software_application(crate, program, software_version)
 
     all_inputs = add_files(crate, crate_root, ioargs.input_files) + add_dirs(
         crate, crate_root, ioargs.input_dirs
