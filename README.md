@@ -14,23 +14,23 @@ pip install rocrate-action-recorder
 
 ```python
 import argparse
-import datetime.datetime
+from datetime import datetime
 from pathlib import Path
-from rocrate_action_recorder import record
+from rocrate_action_recorder import record_with_argparse, IOs
 
 parser = argparse.ArgumentParser(prog="example-cli", description="Example CLI")
 parser.add_argument("--input", type=Path, required=True, help="Input file")
 parser.add_argument("--output", type=Path, required=True, help="Output file")
-args = parser.parse_args(['--input', 'data/input.txt', '--output', 'data/output.txt'])
 
-record(
-    args=args,
-    parser=parser,
-    argv=['example-cli', '--input', 'data/input.txt', '--output', 'data/output.txt'],
-    input_files=['input'],
-    output_files=['output'],
-    start_time=datetime.datetime.now(),
-)
+args = ['--input', 'data/input.txt', '--output', 'data/output.txt']
+ns = parser.parse_args(args)
+ios = IOs(input_files=["input"], output_files=["output"])
+start_time = datetime.now()
+
+# Do handling of the CLI command here...
+
+# named args are for portability, in real usage you can omit them
+record_with_argparse(parser, ns, ios, start_time, software_version="1.2.3", argv=['example-cli'] + args)
 ```
 
 Will generate a `ro-crate-metadata.json` file in the current working directory describing the execution of the CLI command.

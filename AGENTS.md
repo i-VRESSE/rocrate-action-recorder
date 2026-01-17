@@ -19,3 +19,4 @@ uvx ruff check           # Check for issues
 - `uvx` runs tools in isolated environments (no installation needed)
 - Put imports at top of file not inside functions
 - Prefer to start with empty function bodies then write tests and then write code (TDD)
+- When function has more than 5 arguments, call it with named arguments for clarity
