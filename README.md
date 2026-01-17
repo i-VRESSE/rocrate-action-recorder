@@ -7,7 +7,7 @@
 
 Python package to record calls of Python CLI commands into a [Research Object Crate (RO-Crate)](https://www.researchobject.org/ro-crate/).
 
-Supports [RO-Crate 1.1](https://www.researchobject.org/ro-crate/specification/1.1/index.html) specification..
+Supports [RO-Crate 1.1](https://www.researchobject.org/ro-crate/specification/1.1/index.html) specification.
 
 ## Install
 
@@ -27,7 +27,7 @@ parser = argparse.ArgumentParser(prog="example-cli", description="Example CLI")
 parser.add_argument("--input", type=Path, required=True, help="Input file")
 parser.add_argument("--output", type=Path, required=True, help="Output file")
 
-args = ['--input', 'data/input.txt', '--output', 'data/output.txt']
+args = ['--input', 'input.txt', '--output', 'output.txt']
 ns = parser.parse_args(args)
 ios = IOs(input_files=["input"], output_files=["output"])
 start_time = datetime.now()
@@ -38,7 +38,68 @@ start_time = datetime.now()
 record_with_argparse(parser, ns, ios, start_time, software_version="1.2.3", argv=['example-cli'] + args)
 ```
 
+<details>
+<summary>
 Will generate a `ro-crate-metadata.json` file in the current working directory describing the execution of the CLI command.
+</summary>
+
+```json
+{
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [
+            {
+                "@id": "./",
+                "@type": "Dataset",
+                "datePublished": "2026-01-16T12:00:05+00:00",
+                "hasPart": [{"@id": "input.txt"}, {"@id": "output.txt"}],
+                "license": "CC-BY-4.0",
+            },
+            {
+                "@id": "ro-crate-metadata.json",
+                "@type": "CreativeWork",
+                "about": {"@id": "./"},
+                "conformsTo": {"@id": "https://w3id.org/ro/crate/1.1"},
+            },
+            {
+                "@id": "example-cli@1.2.3",
+                "@type": "SoftwareApplication",
+                "description": "Example CLI",
+                "name": "example-cli",
+                "version": "1.2.3",
+            },
+            {
+                "@id": "input.txt",
+                "@type": "File",
+                "contentSize": 12,
+                "description": "Input file",
+                "encodingFormat": "text/plain",
+                "name": "input.txt",
+            },
+            {
+                "@id": "output.txt",
+                "@type": "File",
+                "contentSize": 12,
+                "description": "Output file",
+                "encodingFormat": "text/plain",
+                "name": "output.txt",
+            },
+            {"@id": "test_user", "@type": "Person", "name": "test_user"},
+            {
+                "@id": "example-cli --input input.txt --output output.txt",
+                "@type": "CreateAction",
+                "agent": {"@id": "test_user"},
+                "endTime": "2026-01-16T12:00:05+00:00",
+                "instrument": {"@id": "example-cli@1.2.3"},
+                "name": "example-cli --input input.txt --output output.txt",
+                "object": [{"@id": "input.txt"}],
+                "result": [{"@id": "output.txt"}],
+                "startTime": "2026-01-16T12:00:00+00:00",
+            },
+        ],
+    }
+```
+
+</details>
 
 ## Example
 

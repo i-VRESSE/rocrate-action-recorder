@@ -39,15 +39,17 @@ def argparse_value2path(v: Any) -> Path | None:
     Returns:
         A Path object, or None if the value is not path-like.
     """
-    path = None
     if isinstance(v, Path):
-        path = v
+        return v
     elif hasattr(v, "name"):
-        path = Path(v.name)
+        if v.name == "<stdin>" or v.name == "<stdout>" or v.name == '-':
+            # TODO add test for it
+            return None
+        return Path(v.name)
     elif isinstance(v, str):
-        path = Path(v)
+        return Path(v)
     # TODO handle nargs aka lists of paths
-    return path
+    return None
 
 
 def argparse_info(args: Namespace, parser: ArgumentParser) -> Info:

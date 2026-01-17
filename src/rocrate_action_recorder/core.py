@@ -62,10 +62,14 @@ def detect_software_version(program_name: str) -> str:
         Version string if found, otherwise empty string.
     """
     # try to use program name as package name
-    software_version = importlib.metadata.version(program_name)
+    try:
+        software_version = importlib.metadata.version(program_name)
+    except importlib.metadata.PackageNotFoundError:
+        software_version = ""
     if not software_version:
-        # TODO try to determine package from calller frame?
+        # TODO try to determine package from caller frame?
         pass
+    # TODO try swapping dashes and underscores in program name?
     return software_version
 
 
@@ -193,7 +197,7 @@ def build_software_application(
     return software_app
 
 
-def add_sofware_application(
+def add_software_application(
     crate: ROCrate, program: Program, software_version: str
 ) -> SoftwareApplication:
     """Add or get a SoftwareApplication in the crate.
@@ -387,6 +391,7 @@ def add_action(
     """
     existing_action = crate.get(action_id)
     if existing_action:
+        # TODO add UpdateAction block with new inputs/outputs metadata and times?
         return
 
     crate.add_action(
@@ -480,7 +485,7 @@ def _update_crate(
     Returns:
         The updated ROCrate object.
     """
-    software = add_sofware_application(crate, program, software_version)
+    software = add_software_application(crate, program, software_version)
 
     all_inputs = add_files(crate, crate_root, ioargs.input_files) + add_dirs(
         crate, crate_root, ioargs.input_dirs
@@ -506,3 +511,7 @@ def _update_crate(
         crate.license = dataset_license
     crate.datePublished = end_time
     return crate
+
+# TODO add `def playback(crate_root: Path) -> str` function 
+# that prints names of UpdateActions
+# and can be used to re-run the recorded actions

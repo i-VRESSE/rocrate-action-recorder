@@ -25,7 +25,7 @@ def assert_crate_shape(crate_dir: Path) -> None:
         profile_identifier="process-run-crate",
         requirement_severity=models.Severity.RECOMMENDED,
     )
-    # TODO the validator is slow (~0.9s), make faster
+    # TODO the validator is slow (~0.9s), make faster or call less often
     result = services.validate(settings)
     assert result.passed()
 
@@ -974,3 +974,5 @@ def test_dirs(tmp_path: Path) -> None:
         ],
     }
     assert actual_entities == expected_entities
+
+# TODO add test that has files in subdirectories
