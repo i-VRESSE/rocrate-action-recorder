@@ -30,9 +30,7 @@ def assert_crate_shape(crate_dir: Path) -> None:
     assert result.passed()
 
 
-def test_onein_oneout_abspaths(
-    tmp_path: Path, sample_argument_parser: ArgumentParser
-):
+def test_onein_oneout_abspaths(tmp_path: Path, sample_argument_parser: ArgumentParser):
     parser = sample_argument_parser
     crate_dir = tmp_path
     input_path = crate_dir / "input.txt"
@@ -229,11 +227,14 @@ def test_strargs(tmp_path: Path) -> None:
     actual_entities = json.loads(crate_meta.read_text(encoding="utf-8"))
     assert actual_entities == expected_entities
 
+
 def test_filetypeargs(tmp_path: Path) -> None:
     parser = ArgumentParser(prog="myscript", description="Example CLI")
     # Use str types instead of Path
-    parser.add_argument("--input", type=FileType('r'), help="Input file")
-    parser.add_argument("--output", type=FileType('w', encoding='UTF-8'), help="Output file")
+    parser.add_argument("--input", type=FileType("r"), help="Input file")
+    parser.add_argument(
+        "--output", type=FileType("w", encoding="UTF-8"), help="Output file"
+    )
 
     crate_dir = tmp_path
     input_path = crate_dir / "input.txt"
@@ -333,7 +334,6 @@ def test_filetypeargs(tmp_path: Path) -> None:
     assert actual_entities == expected_entities
 
 
-
 def test_record_different_files(tmp_path: Path, sample_argument_parser: ArgumentParser):
     parser = sample_argument_parser
     crate_dir = tmp_path
@@ -388,25 +388,92 @@ def test_record_different_files(tmp_path: Path, sample_argument_parser: Argument
     assert_crate_shape(crate_dir)
 
     actual_entities = json.loads(crate_meta.read_text(encoding="utf-8"))
-    graph = actual_entities["@graph"]
-
-    # Verify two distinct CreateAction entities exist
-    actions = [e for e in graph if e.get("@type") == "CreateAction"]
-    assert len(actions) == 2, f"Expected 2 CreateAction entities, got {len(actions)}"
-
-    # Verify actions have different command IDs
-    action_ids = {a["@id"] for a in actions}
-    assert len(action_ids) == 2, "Action IDs should be unique"
-
-    # Verify all four files are included
-    files = [e for e in graph if e.get("@type") == "File"]
-    file_ids = {f["@id"] for f in files}
-    assert file_ids == {"input.txt", "output.txt", "input2.txt", "output2.txt"}
-
-    # Verify root dataset includes all files
-    root = next(e for e in graph if e.get("@id") == "./")
-    hasPart = {part["@id"] for part in root["hasPart"]}
-    assert hasPart == {"input.txt", "output.txt", "input2.txt", "output2.txt"}
+    expected_entities = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [
+            {
+                "@id": "./",
+                "@type": "Dataset",
+                "datePublished": "2026-01-16T12:00:15+00:00",
+                "hasPart": [
+                    {"@id": "input.txt"},
+                    {"@id": "output.txt"},
+                    {"@id": "input2.txt"},
+                    {"@id": "output2.txt"},
+                ],
+                "license": "CC-BY-4.0",
+            },
+            {
+                "@id": "ro-crate-metadata.json",
+                "@type": "CreativeWork",
+                "about": {"@id": "./"},
+                "conformsTo": {"@id": "https://w3id.org/ro/crate/1.1"},
+            },
+            {
+                "@id": "input.txt",
+                "@type": "File",
+                "contentSize": 7,
+                "description": "Input file",
+                "encodingFormat": "text/plain",
+                "name": "input.txt",
+            },
+            {
+                "@id": "output.txt",
+                "@type": "File",
+                "contentSize": 7,
+                "description": "Output file",
+                "encodingFormat": "text/plain",
+                "name": "output.txt",
+            },
+            {
+                "@id": "myscript@1.2.3",
+                "@type": "SoftwareApplication",
+                "description": "Example CLI",
+                "name": "myscript",
+                "version": "1.2.3",
+            },
+            {"@id": "test_user", "@type": "Person", "name": "test_user"},
+            {
+                "@id": f"myscript --input {input1_path} --output {output1_path}",
+                "@type": "CreateAction",
+                "agent": {"@id": "test_user"},
+                "endTime": "2026-01-16T12:00:05+00:00",
+                "instrument": {"@id": "myscript@1.2.3"},
+                "name": f"myscript --input {input1_path} --output {output1_path}",
+                "object": [{"@id": "input.txt"}],
+                "result": [{"@id": "output.txt"}],
+                "startTime": "2026-01-16T12:00:00+00:00",
+            },
+            {
+                "@id": "input2.txt",
+                "@type": "File",
+                "contentSize": 7,
+                "description": "Input file",
+                "encodingFormat": "text/plain",
+                "name": "input2.txt",
+            },
+            {
+                "@id": "output2.txt",
+                "@type": "File",
+                "contentSize": 7,
+                "description": "Output file",
+                "encodingFormat": "text/plain",
+                "name": "output2.txt",
+            },
+            {
+                "@id": f"myscript --input {input2_path} --output {output2_path}",
+                "@type": "CreateAction",
+                "agent": {"@id": "test_user"},
+                "endTime": "2026-01-16T12:00:15+00:00",
+                "instrument": {"@id": "myscript@1.2.3"},
+                "name": f"myscript --input {input2_path} --output {output2_path}",
+                "object": [{"@id": "input2.txt"}],
+                "result": [{"@id": "output2.txt"}],
+                "startTime": "2026-01-16T12:00:10+00:00",
+            },
+        ],
+    }
+    assert actual_entities == expected_entities
 
 
 def test_record_same_input_different_output(
@@ -464,30 +531,83 @@ def test_record_same_input_different_output(
     assert_crate_shape(crate_dir)
 
     actual_entities = json.loads(crate_meta.read_text(encoding="utf-8"))
-    graph = actual_entities["@graph"]
-
-    # Verify two distinct CreateAction entities exist
-    actions = [e for e in graph if e.get("@type") == "CreateAction"]
-    assert len(actions) == 2, f"Expected 2 CreateAction entities, got {len(actions)}"
-
-    # Verify input.txt is referenced by both actions
-    input_refs = []
-    for action in actions:
-        input_objs = [obj["@id"] for obj in action.get("object", [])]
-        input_refs.extend(input_objs)
-    assert input_refs.count("data.txt") == 2, (
-        "Input file should be referenced by both actions"
-    )
-
-    # Verify three files total: shared input + two outputs
-    files = [e for e in graph if e.get("@type") == "File"]
-    file_ids = {f["@id"] for f in files}
-    assert file_ids == {"data.txt", "output1.txt", "output2.txt"}
-
-    # Verify root dataset includes all files (no duplication)
-    root = next(e for e in graph if e.get("@id") == "./")
-    hasPart = {part["@id"] for part in root["hasPart"]}
-    assert hasPart == {"data.txt", "output1.txt", "output2.txt"}
+    expected_entities = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [
+            {
+                "@id": "./",
+                "@type": "Dataset",
+                "datePublished": "2026-01-16T13:00:15+00:00",
+                "hasPart": [
+                    {"@id": "data.txt"},
+                    {"@id": "output1.txt"},
+                    {"@id": "output2.txt"},
+                ],
+                "license": "CC-BY-4.0",
+            },
+            {
+                "@id": "ro-crate-metadata.json",
+                "@type": "CreativeWork",
+                "about": {"@id": "./"},
+                "conformsTo": {"@id": "https://w3id.org/ro/crate/1.1"},
+            },
+            {
+                "@id": "data.txt",
+                "@type": "File",
+                "contentSize": 13,
+                "description": "Input file",
+                "encodingFormat": "text/plain",
+                "name": "data.txt",
+            },
+            {
+                "@id": "output1.txt",
+                "@type": "File",
+                "contentSize": 13,
+                "description": "Output file",
+                "encodingFormat": "text/plain",
+                "name": "output1.txt",
+            },
+            {
+                "@id": "myscript@2.0.0",
+                "@type": "SoftwareApplication",
+                "description": "Example CLI",
+                "name": "myscript",
+                "version": "2.0.0",
+            },
+            {"@id": "researcher", "@type": "Person", "name": "researcher"},
+            {
+                "@id": f"processor --input {input_path} --output {output1_path}",
+                "@type": "CreateAction",
+                "agent": {"@id": "researcher"},
+                "endTime": "2026-01-16T13:00:05+00:00",
+                "instrument": {"@id": "myscript@2.0.0"},
+                "name": f"processor --input {input_path} --output {output1_path}",
+                "object": [{"@id": "data.txt"}],
+                "result": [{"@id": "output1.txt"}],
+                "startTime": "2026-01-16T13:00:00+00:00",
+            },
+            {
+                "@id": "output2.txt",
+                "@type": "File",
+                "contentSize": 13,
+                "description": "Output file",
+                "encodingFormat": "text/plain",
+                "name": "output2.txt",
+            },
+            {
+                "@id": f"processor --input {input_path} --output {output2_path}",
+                "@type": "CreateAction",
+                "agent": {"@id": "researcher"},
+                "endTime": "2026-01-16T13:00:15+00:00",
+                "instrument": {"@id": "myscript@2.0.0"},
+                "name": f"processor --input {input_path} --output {output2_path}",
+                "object": [{"@id": "data.txt"}],
+                "result": [{"@id": "output2.txt"}],
+                "startTime": "2026-01-16T13:00:10+00:00",
+            },
+        ],
+    }
+    assert actual_entities == expected_entities
 
 
 def test_record_same_command_twice(
@@ -543,18 +663,60 @@ def test_record_same_command_twice(
     assert_crate_shape(crate_dir)
 
     actual_entities = json.loads(crate_meta.read_text(encoding="utf-8"))
-    graph = actual_entities["@graph"]
-
-    # Verify only one CreateAction exists (second call is skipped)
-    actions = [e for e in graph if e.get("@type") == "CreateAction"]
-    assert len(actions) == 1, (
-        f"Expected 1 CreateAction (duplicate skipped), got {len(actions)}"
-    )
-
-    # Verify the action references correct files
-    action = actions[0]
-    assert action["object"] == [{"@id": "input.txt"}]
-    assert action["result"] == [{"@id": "output.txt"}]
+    expected_entities = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [
+            {
+                "@id": "./",
+                "@type": "Dataset",
+                "datePublished": "2026-01-16T14:00:15+00:00",
+                "hasPart": [{"@id": "input.txt"}, {"@id": "output.txt"}],
+                "license": "CC-BY-4.0",
+            },
+            {
+                "@id": "ro-crate-metadata.json",
+                "@type": "CreativeWork",
+                "about": {"@id": "./"},
+                "conformsTo": {"@id": "https://w3id.org/ro/crate/1.1"},
+            },
+            {
+                "@id": "input.txt",
+                "@type": "File",
+                "contentSize": 5,
+                "description": "Input file",
+                "encodingFormat": "text/plain",
+                "name": "input.txt",
+            },
+            {
+                "@id": "output.txt",
+                "@type": "File",
+                "contentSize": 5,
+                "description": "Output file",
+                "encodingFormat": "text/plain",
+                "name": "output.txt",
+            },
+            {
+                "@id": "myscript@1.0.0",
+                "@type": "SoftwareApplication",
+                "description": "Example CLI",
+                "name": "myscript",
+                "version": "1.0.0",
+            },
+            {"@id": "bot", "@type": "Person", "name": "bot"},
+            {
+                "@id": f"process --input {input_path} --output {output_path}",
+                "@type": "CreateAction",
+                "agent": {"@id": "bot"},
+                "endTime": "2026-01-16T14:00:05+00:00",
+                "instrument": {"@id": "myscript@1.0.0"},
+                "name": f"process --input {input_path} --output {output_path}",
+                "object": [{"@id": "input.txt"}],
+                "result": [{"@id": "output.txt"}],
+                "startTime": "2026-01-16T14:00:00+00:00",
+            },
+        ],
+    }
+    assert actual_entities == expected_entities
 
 
 def test_record_two_different_commands(tmp_path: Path):
@@ -625,41 +787,190 @@ def test_record_two_different_commands(tmp_path: Path):
     assert_crate_shape(crate_dir)
 
     actual_entities = json.loads(crate_meta.read_text(encoding="utf-8"))
-    graph = actual_entities["@graph"]
+    expected_entities = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [
+            {
+                "@id": "./",
+                "@type": "Dataset",
+                "datePublished": "2026-01-17T10:00:15+00:00",
+                "hasPart": [
+                    {"@id": "data.txt"},
+                    {"@id": "converted.txt"},
+                    {"@id": "analysis.json"},
+                ],
+                "license": "CC-BY-4.0",
+            },
+            {
+                "@id": "ro-crate-metadata.json",
+                "@type": "CreativeWork",
+                "about": {"@id": "./"},
+                "conformsTo": {"@id": "https://w3id.org/ro/crate/1.1"},
+            },
+            {
+                "@id": "data.txt",
+                "@type": "File",
+                "contentSize": 9,
+                "description": "Input file",
+                "encodingFormat": "text/plain",
+                "name": "data.txt",
+            },
+            {
+                "@id": "converted.txt",
+                "@type": "File",
+                "contentSize": 9,
+                "description": "File to analyze",
+                "encodingFormat": "text/plain",
+                "name": "converted.txt",
+            },
+            {
+                "@id": "converter@1.0.0",
+                "@type": "SoftwareApplication",
+                "description": "Convert files",
+                "name": "converter",
+                "version": "1.0.0",
+            },
+            {"@id": "researcher", "@type": "Person", "name": "researcher"},
+            {
+                "@id": f"converter --input {input1_path} --output {output1_path}",
+                "@type": "CreateAction",
+                "agent": {"@id": "researcher"},
+                "endTime": "2026-01-17T10:00:05+00:00",
+                "instrument": {"@id": "converter@1.0.0"},
+                "name": f"converter --input {input1_path} --output {output1_path}",
+                "object": [{"@id": "data.txt"}],
+                "result": [{"@id": "converted.txt"}],
+                "startTime": "2026-01-17T10:00:00+00:00",
+            },
+            {
+                "@id": "analyzer@2.5.0",
+                "@type": "SoftwareApplication",
+                "description": "Analyze files",
+                "name": "analyzer",
+                "version": "2.5.0",
+            },
+            {
+                "@id": "analysis.json",
+                "@type": "File",
+                "contentSize": 13,
+                "description": "Analysis result",
+                "encodingFormat": "application/json",
+                "name": "analysis.json",
+            },
+            {
+                "@id": f"analyzer --input {input2_path} --output {output2_path}",
+                "@type": "CreateAction",
+                "agent": {"@id": "researcher"},
+                "endTime": "2026-01-17T10:00:15+00:00",
+                "instrument": {"@id": "analyzer@2.5.0"},
+                "name": f"analyzer --input {input2_path} --output {output2_path}",
+                "object": [{"@id": "converted.txt"}],
+                "result": [{"@id": "analysis.json"}],
+                "startTime": "2026-01-17T10:00:10+00:00",
+            },
+        ],
+    }
+    assert actual_entities == expected_entities
 
-    actual_software_apps = [e for e in graph if e.get("@type") == "SoftwareApplication"]
-    expected_software_apps = [
-        {
-            "@id": "converter@1.0.0",
-            "@type": "SoftwareApplication",
-            "description": "Convert files",
-            "name": "converter",
-            "version": "1.0.0",
-        },
-        {
-            "@id": "analyzer@2.5.0",
-            "@type": "SoftwareApplication",
-            "description": "Analyze files",
-            "name": "analyzer",
-            "version": "2.5.0",
-        },
+
+def test_dirs(tmp_path: Path) -> None:
+    """Test recording with --input-dir and --output-dir arguments.
+
+    Simulates copying files from input dir to output dir with uppercased filenames and contents.
+    """
+    parser = ArgumentParser(prog="dirprocessor", description="Process directories")
+    parser.add_argument("--input-dir", type=Path, help="Input directory")
+    parser.add_argument("--output-dir", type=Path, help="Output directory")
+
+    crate_dir = tmp_path
+    input_dir = crate_dir / "input"
+    output_dir = crate_dir / "output"
+
+    # Create input directory with some files
+    input_dir.mkdir()
+    (input_dir / "file1.txt").write_text("hello world\n")
+    (input_dir / "file2.txt").write_text("foo bar\n")
+
+    # Create output directory
+    output_dir.mkdir()
+
+    args = [
+        "--input-dir",
+        str(input_dir),
+        "--output-dir",
+        str(output_dir),
     ]
-    assert actual_software_apps == expected_software_apps
+    ns = parser.parse_args(args)
 
-    # Verify two CreateAction entities exist
-    actions = [e for e in graph if e.get("@type") == "CreateAction"]
-    assert len(actions) == 2, f"Expected 2 CreateAction entities, got {len(actions)}"
+    # Simulate the script's main operation: copy files with uppercased names and contents
+    for file_path in input_dir.iterdir():
+        if file_path.is_file():
+            uppercase_name = file_path.name.upper()
+            uppercase_content = file_path.read_text().upper()
+            (output_dir / uppercase_name).write_text(uppercase_content)
 
-    # Verify each action uses the correct instrument
-    instruments = {action["instrument"]["@id"] for action in actions}
-    assert instruments == {"converter@1.0.0", "analyzer@2.5.0"}
+    start_time = datetime(2026, 1, 17, 13, 0, 0, tzinfo=UTC)
+    end_time = datetime(2026, 1, 17, 13, 0, 10, tzinfo=UTC)
 
-    # Verify all files are included
-    files = [e for e in graph if e.get("@type") == "File"]
-    file_ids = {f["@id"] for f in files}
-    assert file_ids == {"data.txt", "converted.txt", "analysis.json"}
+    crate_meta = record_with_argparse(
+        parser=parser,
+        ns=ns,
+        ios=IOs(
+            input_dirs=["input_dir"],
+            output_dirs=["output_dir"],
+        ),
+        start_time=start_time,
+        crate_dir=crate_dir,
+        argv=["dirprocessor"] + args,
+        current_user="test_user",
+        end_time=end_time,
+        software_version="1.0.0",
+        dataset_license="CC-BY-4.0",
+    )
 
-    # Verify root dataset includes all files
-    root = next(e for e in graph if e.get("@id") == "./")
-    hasPart = {part["@id"] for part in root["hasPart"]}
-    assert hasPart == {"data.txt", "converted.txt", "analysis.json"}
+    assert crate_meta.exists(), (
+        "record() did not produce ro-crate-metadata.json in crate_dir"
+    )
+    assert_crate_shape(crate_dir)
+
+    actual_entities = json.loads(crate_meta.read_text(encoding="utf-8"))
+    expected_entities = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [
+            {
+                "@id": "./",
+                "@type": "Dataset",
+                "datePublished": "2026-01-17T13:00:10+00:00",
+                "hasPart": [{"@id": "input/"}, {"@id": "output/"}],
+                "license": "CC-BY-4.0",
+            },
+            {
+                "@id": "ro-crate-metadata.json",
+                "@type": "CreativeWork",
+                "about": {"@id": "./"},
+                "conformsTo": {"@id": "https://w3id.org/ro/crate/1.1"},
+            },
+            {
+                "@id": "dirprocessor@1.0.0",
+                "@type": "SoftwareApplication",
+                "description": "Process directories",
+                "name": "dirprocessor",
+                "version": "1.0.0",
+            },
+            {"@id": "input/", "@type": "Dataset", "name": "input"},
+            {"@id": "output/", "@type": "Dataset", "name": "output"},
+            {"@id": "test_user", "@type": "Person", "name": "test_user"},
+            {
+                "@id": f"dirprocessor --input-dir {input_dir} --output-dir {output_dir}",
+                "@type": "CreateAction",
+                "agent": {"@id": "test_user"},
+                "endTime": "2026-01-17T13:00:10+00:00",
+                "instrument": {"@id": "dirprocessor@1.0.0"},
+                "name": f"dirprocessor --input-dir {input_dir} --output-dir {output_dir}",
+                "object": [{"@id": "input/"}],
+                "result": [{"@id": "output/"}],
+                "startTime": "2026-01-17T13:00:00+00:00",
+            },
+        ],
+    }
+    assert actual_entities == expected_entities
