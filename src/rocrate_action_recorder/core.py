@@ -23,6 +23,7 @@ from rocrate.rocrate import ROCrate, SoftwareApplication, Metadata
 class Program:
     name: str
     description: str
+    subcommands: dict[str, "Program"] = field(default_factory=dict)
 
 
 @dataclass

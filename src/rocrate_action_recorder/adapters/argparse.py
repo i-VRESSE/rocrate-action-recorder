@@ -65,6 +65,9 @@ def argparse_info(args: Namespace, parser: ArgumentParser) -> Info:
 
     Returns:
         An Info object with program details and IO arguments.
+
+    Raises:
+        ValueError: If parser has subparsers but dest is not set.
     """
     ioarguments: dict[str, IOArgument] = {}
     for k, v in args._get_kwargs():
@@ -73,11 +76,34 @@ def argparse_info(args: Namespace, parser: ArgumentParser) -> Info:
             continue
         help = argparse_help(parser, k) or ""
         ioarguments[k] = IOArgument(name=k, path=path, help=help)
+
+    program = Program(
+        name=parser.prog,
+        description=parser.description or "",
+    )
+
+    # Handle subcommands if present
+    if hasattr(parser, "_subparsers") and parser._subparsers:
+        for action in parser._subparsers._actions:
+            if hasattr(action, "choices") and isinstance(action.choices, dict):
+                dest = action.dest
+                if not dest or dest == "==SUPPRESS==":
+                    raise ValueError(
+                        "record_with_argparse requires add_subparsers(dest='name') "
+                        "with dest parameter set"
+                    )
+
+                subcommand_name = getattr(args, dest, None)
+                if subcommand_name and subcommand_name in action.choices:
+                    subparser = action.choices[subcommand_name]
+                    subinfo = argparse_info(args, subparser)
+                    program.subcommands[subcommand_name] = subinfo.program
+                    # Merge ioarguments from subcommand
+                    ioarguments.update(subinfo.ioarguments)
+                break
+
     return Info(
-        program=Program(
-            name=parser.prog,
-            description=parser.description or "",
-        ),
+        program=program,
         ioarguments=ioarguments,
     )
 

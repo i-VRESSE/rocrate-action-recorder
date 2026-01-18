@@ -9,7 +9,8 @@ from rocrate_validator import services, models
 from rocrate_validator.utils.uri import URI
 
 from rocrate_action_recorder import record_with_argparse, IOs
-from rocrate_action_recorder.adapters.argparse import argparse_value2path
+from rocrate_action_recorder.adapters.argparse import argparse_value2path, argparse_info
+from rocrate_action_recorder.core import Info, Program, IOArgument
 
 
 @pytest.fixture
@@ -1488,4 +1489,242 @@ def test_aargparse_value2path_stdin_handling():
     # causes `alueError: I/O operation on closed file.` while in pytest
 
 
-# TODO add test that checks sub commands in argparse (e.g. git commit)
+def test_argparse_info_subcommand_single_level(tmp_path: Path) -> None:
+    """Test argparse_info extracts single-level subcommand (e.g., git commit)."""
+    # Create main parser with subcommands
+    parser = ArgumentParser(prog="git", description="Git version control system")
+    subparsers = parser.add_subparsers(dest="command", help="Git commands")
+
+    # Add 'commit' subcommand
+    commit_parser = subparsers.add_parser("commit", help="Record changes to repository")
+    commit_parser.add_argument("--input", type=Path, help="File to commit")
+    commit_parser.add_argument("--output", type=Path, help="Commit log file")
+
+    input_path = tmp_path / "changes.txt"
+    output_path = tmp_path / "commit_log.txt"
+    args = ["commit", "--input", str(input_path), "--output", str(output_path)]
+    ns = parser.parse_args(args)
+
+    info = argparse_info(ns, parser)
+
+    expected = Info(
+        program=Program(
+            name="git",
+            description="Git version control system",
+            subcommands={"commit": Program(name="git commit", description="")},
+        ),
+        ioarguments={
+            "command": IOArgument(name="command", path=Path("commit"), help=""),
+            "input": IOArgument(name="input", path=input_path, help="File to commit"),
+            "output": IOArgument(
+                name="output", path=output_path, help="Commit log file"
+            ),
+        },
+    )
+    assert info == expected
+
+
+def test_argparse_info_subcommand_nested_levels(tmp_path: Path) -> None:
+    """Test argparse_info extracts nested subcommands (e.g., git remote add)."""
+    # Create main parser
+    parser = ArgumentParser(prog="git", description="Git version control system")
+    subparsers = parser.add_subparsers(dest="command", help="Git commands")
+
+    # Add 'remote' subcommand with its own subcommands
+    remote_parser = subparsers.add_parser("remote", help="Manage remote repositories")
+    remote_subparsers = remote_parser.add_subparsers(
+        dest="action", help="Remote actions"
+    )
+
+    # Add 'add' subcommand under 'remote'
+    add_parser = remote_subparsers.add_parser("add", help="Add a new remote")
+    add_parser.add_argument("--input", type=Path, help="Config file")
+    add_parser.add_argument("--output", type=Path, help="Updated config")
+
+    input_path = tmp_path / "git_config.txt"
+    output_path = tmp_path / "git_config_updated.txt"
+    args = ["remote", "add", "--input", str(input_path), "--output", str(output_path)]
+    ns = parser.parse_args(args)
+
+    info = argparse_info(ns, parser)
+
+    expected = Info(
+        program=Program(
+            name="git",
+            description="Git version control system",
+            subcommands={
+                "remote": Program(
+                    name="git remote",
+                    description="",
+                    subcommands={"add": Program(name="git remote add", description="")},
+                )
+            },
+        ),
+        ioarguments={
+            "command": IOArgument(name="command", path=Path("remote"), help=""),
+            "action": IOArgument(name="action", path=Path("add"), help=""),
+            "input": IOArgument(name="input", path=input_path, help="Config file"),
+            "output": IOArgument(
+                name="output", path=output_path, help="Updated config"
+            ),
+        },
+    )
+    assert info == expected
+
+
+def test_argparse_info_subcommand_missing_dest(tmp_path: Path) -> None:
+    """Test that missing dest parameter in add_subparsers raises ValueError."""
+    parser = ArgumentParser(prog="tool", description="A tool")
+    subparsers = parser.add_subparsers(help="Commands")  # Missing dest parameter
+
+    action_parser = subparsers.add_parser("action", help="Do something")
+    action_parser.add_argument("--input", type=Path, help="Input file")
+
+    input_path = tmp_path / "input.txt"
+    args = ["action", "--input", str(input_path)]
+    ns = parser.parse_args(args)
+
+    with pytest.raises(
+        ValueError,
+        match=r"record_with_argparse requires add_subparsers\(dest='name'\) with dest parameter set",
+    ):
+        argparse_info(ns, parser)
+
+
+def test_record_with_argparse_subcommand_multiple_different(tmp_path: Path) -> None:
+    """Test recording multiple different subcommands in the same crate."""
+    parser = ArgumentParser(prog="git", description="Git version control system")
+    subparsers = parser.add_subparsers(dest="command", help="Git commands")
+
+    # Add 'commit' subcommand
+    commit_parser = subparsers.add_parser("commit", help="Record changes")
+    commit_parser.add_argument("--input", type=Path, help="File to commit")
+    commit_parser.add_argument("--output", type=Path, help="Commit log")
+
+    # Add 'push' subcommand
+    push_parser = subparsers.add_parser("push", help="Upload changes")
+    push_parser.add_argument("--input", type=Path, help="Local repository")
+    push_parser.add_argument("--output", type=Path, help="Remote repository")
+
+    crate_dir = tmp_path
+
+    # First action: git commit
+    commit_input = crate_dir / "changes.txt"
+    commit_output = crate_dir / "commit_log.txt"
+    commit_input.write_text("Feature A\n")
+
+    args1 = ["commit", "--input", str(commit_input), "--output", str(commit_output)]
+    ns1 = parser.parse_args(args1)
+    commit_output.write_text(f"Committed: {commit_input.read_text()}")
+
+    start_time1 = datetime(2026, 1, 18, 17, 0, 0, tzinfo=UTC)
+    end_time1 = datetime(2026, 1, 18, 17, 0, 5, tzinfo=UTC)
+
+    record_with_argparse(
+        parser=parser,
+        ns=ns1,
+        ios=IOs(input_files=["input"], output_files=["output"]),
+        start_time=start_time1,
+        crate_dir=crate_dir,
+        argv=["git"] + args1,
+        current_user="developer",
+        end_time=end_time1,
+        software_version="2.40.0",
+        dataset_license="CC-BY-4.0",
+    )
+
+    # Second action: git push
+    push_input = crate_dir / "local_repo.txt"
+    push_output = crate_dir / "remote_repo.txt"
+    push_input.write_text("Local commits\n")
+
+    args2 = ["push", "--input", str(push_input), "--output", str(push_output)]
+    ns2 = parser.parse_args(args2)
+    push_output.write_text(f"Pushed: {push_input.read_text()}")
+
+    start_time2 = datetime(2026, 1, 18, 17, 0, 10, tzinfo=UTC)
+    end_time2 = datetime(2026, 1, 18, 17, 0, 15, tzinfo=UTC)
+
+    crate_meta = record_with_argparse(
+        parser=parser,
+        ns=ns2,
+        ios=IOs(input_files=["input"], output_files=["output"]),
+        start_time=start_time2,
+        crate_dir=crate_dir,
+        argv=["git"] + args2,
+        current_user="developer",
+        end_time=end_time2,
+        software_version="2.40.0",
+        dataset_license="CC-BY-4.0",
+    )
+
+    actual_entities = json.loads(crate_meta.read_text(encoding="utf-8"))
+
+    # Verify single SoftwareApplication entity for "git"
+    software_apps = [
+        e for e in actual_entities["@graph"] if e.get("@type") == "SoftwareApplication"
+    ]
+    assert len(software_apps) == 1
+    assert software_apps[0]["@id"] == "git@2.40.0"
+    assert software_apps[0]["name"] == "git"
+
+    # Verify two CreateAction entities with different command lines
+    create_actions = [
+        e for e in actual_entities["@graph"] if e.get("@type") == "CreateAction"
+    ]
+    assert len(create_actions) == 2
+
+    action_names = {a["name"] for a in create_actions}
+    assert f"git commit --input {commit_input} --output {commit_output}" in action_names
+    assert f"git push --input {push_input} --output {push_output}" in action_names
+
+    # Both actions should reference the same instrument
+    for action in create_actions:
+        assert action["instrument"]["@id"] == "git@2.40.0"
+
+
+def test_argparse_info_subcommand_with_parent_flags(tmp_path: Path) -> None:
+    """Test argparse_info handles flags before subcommand (e.g., git --no-pager status)."""
+    # Create main parser with global flags
+    parser = ArgumentParser(prog="git", description="Git version control system")
+    parser.add_argument(
+        "--no-pager", action="store_true", help="Do not pipe output into a pager"
+    )
+    subparsers = parser.add_subparsers(dest="command", help="Git commands")
+
+    # Add 'status' subcommand
+    status_parser = subparsers.add_parser("status", help="Show working tree status")
+    status_parser.add_argument("--input", type=Path, help="Repository directory")
+    status_parser.add_argument("--output", type=Path, help="Status output file")
+
+    input_path = tmp_path / "repo"
+    output_path = tmp_path / "status.txt"
+    args = [
+        "--no-pager",
+        "status",
+        "--input",
+        str(input_path),
+        "--output",
+        str(output_path),
+    ]
+    ns = parser.parse_args(args)
+
+    info = argparse_info(ns, parser)
+
+    expected = Info(
+        program=Program(
+            name="git",
+            description="Git version control system",
+            subcommands={"status": Program(name="git status", description="")},
+        ),
+        ioarguments={
+            "command": IOArgument(name="command", path=Path("status"), help=""),
+            "input": IOArgument(
+                name="input", path=input_path, help="Repository directory"
+            ),
+            "output": IOArgument(
+                name="output", path=output_path, help="Status output file"
+            ),
+        },
+    )
+    assert info == expected
