@@ -7,11 +7,13 @@ from rocrate_action_recorder.core import (
     Info,
     Program,
     record,
+    playback,
 )
 
 __all__ = [
     "record_with_argparse",
     "record",
+    "playback",
     "Program",
     "IOArgument",
     "Info",

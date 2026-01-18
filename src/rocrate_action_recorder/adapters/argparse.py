@@ -48,7 +48,6 @@ def argparse_value2path(v: Any) -> Path | None:
             or v.name == "<stdout>"
             or v.name == "-"
         ):
-            # TODO add test for it
             return None
         return Path(v.name)
     elif isinstance(v, str):

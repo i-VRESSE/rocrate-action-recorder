@@ -54,6 +54,13 @@ class IOArgs:
     output_dirs: list[IOArgument]
 
 
+@dataclass
+class SoftwareInfo:
+    version: str | None = None
+    homepage: str | None = None
+    license: str | None = None
+
+
 def detect_software_version(program_name: str) -> str:
     """Detect software version from package name or executable.
 
@@ -66,17 +73,17 @@ def detect_software_version(program_name: str) -> str:
     # try to use program name as package name
     try:
         software_version = importlib.metadata.version(program_name)
-        # TODO check if metadata has more software info like homepage, license
     except importlib.metadata.PackageNotFoundError:
         software_version = ""
 
     if not software_version:
         software_version = _dectect_version_by_running(program_name)
-    
+
     if not software_version:
         # TODO try to determine package from caller frame?
         pass
     return software_version
+
 
 def _dectect_version_by_running(program_name: str) -> str:
     """Try to detect version by running the program with --version flag.
@@ -99,10 +106,7 @@ def _dectect_version_by_running(program_name: str) -> str:
 
     try:
         result = subprocess.run(
-            [executable, "--version"],
-            capture_output=True,
-            text=True,
-            timeout=5
+            [executable, "--version"], capture_output=True, text=True, timeout=5
         )
         if result.stdout:
             output = result.stdout.strip()
@@ -557,6 +561,33 @@ def _update_crate(
     return crate
 
 
-# TODO add `def playback(crate_root: Path) -> str` function
-# that prints names of UpdateActions
-# and can be used to re-run the recorded actions
+def playback(crate_root: Path) -> str:
+    """Extract and return recorded action commands sorted by execution time.
+
+    Args:
+        crate_root: Root directory of the RO-Crate.
+
+    Returns:
+        Newline-separated string of action command lines, sorted by endTime.
+        Returns empty string if no actions are recorded.
+    """
+    metadata_file = crate_root / Metadata.BASENAME
+    if not metadata_file.exists():
+        return ""
+
+    crate = ROCrate(crate_root)
+
+    # Extract all CreateActions from the crate (supports UpdateActions when implemented)
+    actions = []
+    for action in crate.get_by_type("CreateAction"):
+        props = action.properties()
+        end_time_str = props.get("endTime", "")
+        action_id = action.id
+        if action_id and end_time_str:
+            actions.append((end_time_str, action_id))
+
+    # Sort by endTime
+    actions.sort(key=lambda x: x[0])
+
+    # Return newline-separated action IDs
+    return "\n".join(action_id for _, action_id in actions)
