@@ -8,19 +8,22 @@ import mimetypes
 import os
 import pwd
 from pathlib import Path
+import shutil
+import subprocess
 import sys
 from shlex import quote
 
 from rocrate.model import File
 from rocrate.model.dataset import Dataset
 from rocrate.model.person import Person
-from rocrate.rocrate import ROCrate, SoftwareApplication, Metadata
+from rocrate.rocrate import Entity, ROCrate, SoftwareApplication, Metadata
 
 
 @dataclass
 class Program:
     name: str
     description: str
+    subcommands: dict[str, "Program"] = field(default_factory=dict)
 
 
 @dataclass
@@ -33,7 +36,7 @@ class IOArgument:
 @dataclass
 class Info:
     program: Program
-    ioarguments: dict[str, IOArgument]
+    ioarguments: dict[str, list[IOArgument]]
 
 
 @dataclass
@@ -52,11 +55,18 @@ class IOArgs:
     output_dirs: list[IOArgument]
 
 
+@dataclass
+class SoftwareInfo:
+    version: str | None = None
+    homepage: str | None = None
+    license: str | None = None
+
+
 def detect_software_version(program_name: str) -> str:
-    """Detect software version from package name.
+    """Detect software version from package name or executable.
 
     Args:
-        program_name: Name of the program/package.
+        program_name: Name of the program/package or path to executable.
 
     Returns:
         Version string if found, otherwise empty string.
@@ -66,11 +76,69 @@ def detect_software_version(program_name: str) -> str:
         software_version = importlib.metadata.version(program_name)
     except importlib.metadata.PackageNotFoundError:
         software_version = ""
+
+    if not software_version:
+        software_version = _dectect_version_by_running(program_name)
+
     if not software_version:
         # TODO try to determine package from caller frame?
         pass
-    # TODO try swapping dashes and underscores in program name?
     return software_version
+
+
+def _dectect_version_by_running(program_name: str) -> str:
+    """Try to detect version by running the program with --version flag.
+
+    Args:
+        program_name: Name of the program or path to executable.
+
+    Returns:
+        Version string if found, otherwise empty string.
+    """
+    # First try as a direct file path
+    program_path = Path(program_name)
+    if program_path.is_file() and os.access(program_path, os.X_OK):
+        executable = str(program_path)
+    else:
+        # Try to find the program in PATH
+        executable = shutil.which(program_name)
+        if not executable:
+            return ""
+
+    try:
+        result = subprocess.run(
+            [executable, "--version"], capture_output=True, text=True, timeout=5
+        )
+        if result.stdout:
+            output = result.stdout.strip()
+            # Remove script name from output by taking the last space-separated token
+            parts = output.split()
+            if len(parts) > 1:
+                return parts[-1]
+            else:
+                return output
+    except (subprocess.TimeoutExpired, subprocess.SubprocessError, FileNotFoundError):
+        pass
+    return ""
+
+
+def _collect_ioargs(
+    argument_names: list[str], ioarguments: dict[str, list[IOArgument]]
+) -> list[IOArgument]:
+    """Collect IOArguments for the given argument names.
+
+    Args:
+        argument_names: List of argument names to match.
+        ioarguments: Dictionary mapping argument names to lists of IOArguments.
+
+    Returns:
+        List of IOArgument objects for the matching argument names.
+    """
+    args = []
+    for argument_name in argument_names:
+        if argument_name in ioarguments:
+            args.extend(ioarguments[argument_name])
+    return args
 
 
 def make_action_id(argv: list[str] | None = None) -> str:
@@ -145,18 +213,10 @@ def record(
     software_version = software_version or detect_software_version(info.program.name)
 
     ioargs = IOArgs(
-        input_files=[
-            info.ioarguments[f] for f in ios.input_files if f in info.ioarguments
-        ],
-        output_files=[
-            info.ioarguments[f] for f in ios.output_files if f in info.ioarguments
-        ],
-        input_dirs=[
-            info.ioarguments[d] for d in ios.input_dirs if d in info.ioarguments
-        ],
-        output_dirs=[
-            info.ioarguments[d] for d in ios.output_dirs if d in info.ioarguments
-        ],
+        input_files=_collect_ioargs(ios.input_files, info.ioarguments),
+        output_files=_collect_ioargs(ios.output_files, info.ioarguments),
+        input_dirs=_collect_ioargs(ios.input_dirs, info.ioarguments),
+        output_dirs=_collect_ioargs(ios.output_dirs, info.ioarguments),
     )
 
     return _record_run(
@@ -299,7 +359,8 @@ def add_file(crate: ROCrate, crate_root: Path, ioarg: IOArgument) -> File:
         return existing_file
     file = File(
         crate,
-        identifier,
+        source=path,
+        dest_path=identifier,
         properties={
             "name": identifier,
             "description": ioarg.help,
@@ -456,6 +517,24 @@ def _record_run(
     return metadata_file
 
 
+def _unique_by_id[T: Entity](entities: list[T]) -> list[T]:
+    """Get unique entities based on their IDs.
+
+    Args:
+        entities: List of entities.
+
+    Returns:
+        List of unique entities.
+    """
+    seen_ids = set()
+    unique_entities = []
+    for entity in entities:
+        if entity.id not in seen_ids:
+            seen_ids.add(entity.id)
+            unique_entities.append(entity)
+    return unique_entities
+
+
 def _update_crate(
     crate: ROCrate,
     crate_root: Path,
@@ -502,8 +581,8 @@ def _update_crate(
         start_time=start_time,
         end_time=end_time,
         software=software,
-        all_inputs=all_inputs,
-        all_outputs=all_outputs,
+        all_inputs=_unique_by_id(all_inputs),
+        all_outputs=_unique_by_id(all_outputs),
         agent=agent,
     )
 
@@ -512,6 +591,34 @@ def _update_crate(
     crate.datePublished = end_time
     return crate
 
-# TODO add `def playback(crate_root: Path) -> str` function 
-# that prints names of UpdateActions
-# and can be used to re-run the recorded actions
+
+def playback(crate_root: Path) -> str:
+    """Extract and return recorded action commands sorted by execution time.
+
+    Args:
+        crate_root: Root directory of the RO-Crate.
+
+    Returns:
+        Newline-separated string of action command lines, sorted by endTime.
+        Returns empty string if no actions are recorded.
+    """
+    metadata_file = crate_root / Metadata.BASENAME
+    if not metadata_file.exists():
+        return ""
+
+    crate = ROCrate(crate_root)
+
+    # Extract all CreateActions from the crate (supports UpdateActions when implemented)
+    actions = []
+    for action in crate.get_by_type("CreateAction"):
+        props = action.properties()
+        end_time_str = props.get("endTime", "")
+        action_id = action.id
+        if action_id and end_time_str:
+            actions.append((end_time_str, action_id))
+
+    # Sort by endTime
+    actions.sort(key=lambda x: x[0])
+
+    # Return newline-separated action IDs
+    return "\n".join(action_id for _, action_id in actions)
