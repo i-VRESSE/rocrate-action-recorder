@@ -950,6 +950,325 @@ def test_dirs(tmp_path: Path) -> None:
     assert actual_entities == expected_entities
 
 
+def test_files_in_single_level_subdirectories(
+    tmp_path: Path, sample_argument_parser: ArgumentParser
+) -> None:
+    """Test recording with files in single-level subdirectories using absolute paths."""
+    parser = sample_argument_parser
+    crate_dir = tmp_path
+
+    # Create subdirectories
+    input_dir = crate_dir / "data"
+    input_dir.mkdir()
+    output_dir = crate_dir / "results"
+    output_dir.mkdir()
+
+    # Create input file in subdirectory
+    input_path = input_dir / "input.txt"
+    input_path.write_text("Hello from subdirectory\n")
+
+    # Define output path in subdirectory
+    output_path = output_dir / "output.txt"
+
+    args = [
+        "--input",
+        str(input_path),
+        "--output",
+        str(output_path),
+    ]
+    ns = parser.parse_args(args)
+
+    # Simulate the script's main operation
+    output_path.write_text(input_path.read_text().upper())
+
+    start_time = datetime(2026, 1, 18, 10, 0, 0, tzinfo=UTC)
+    end_time = datetime(2026, 1, 18, 10, 0, 5, tzinfo=UTC)
+
+    crate_meta = record_with_argparse(
+        parser=parser,
+        ns=ns,
+        ios=IOs(
+            input_files=["input"],
+            output_files=["output"],
+        ),
+        start_time=start_time,
+        crate_dir=crate_dir,
+        argv=["myscript"] + args,
+        current_user="test_user",
+        end_time=end_time,
+        software_version="1.2.3",
+        dataset_license="CC-BY-4.0",
+    )
+
+    actual_entities = json.loads(crate_meta.read_text(encoding="utf-8"))
+    expected_entities = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [
+            {
+                "@id": "./",
+                "@type": "Dataset",
+                "datePublished": "2026-01-18T10:00:05+00:00",
+                "hasPart": [{"@id": "data/input.txt"}, {"@id": "results/output.txt"}],
+                "license": "CC-BY-4.0",
+            },
+            {
+                "@id": "ro-crate-metadata.json",
+                "@type": "CreativeWork",
+                "about": {"@id": "./"},
+                "conformsTo": {"@id": "https://w3id.org/ro/crate/1.1"},
+            },
+            {
+                "@id": "myscript@1.2.3",
+                "@type": "SoftwareApplication",
+                "description": "Example CLI",
+                "name": "myscript",
+                "version": "1.2.3",
+            },
+            {
+                "@id": "data/input.txt",
+                "@type": "File",
+                "contentSize": 24,
+                "description": "Input file",
+                "encodingFormat": "text/plain",
+                "name": "data/input.txt",
+            },
+            {
+                "@id": "results/output.txt",
+                "@type": "File",
+                "contentSize": 24,
+                "description": "Output file",
+                "encodingFormat": "text/plain",
+                "name": "results/output.txt",
+            },
+            {"@id": "test_user", "@type": "Person", "name": "test_user"},
+            {
+                "@id": f"myscript --input {input_path} --output {output_path}",
+                "@type": "CreateAction",
+                "agent": {"@id": "test_user"},
+                "endTime": "2026-01-18T10:00:05+00:00",
+                "instrument": {"@id": "myscript@1.2.3"},
+                "name": f"myscript --input {input_path} --output {output_path}",
+                "object": [{"@id": "data/input.txt"}],
+                "result": [{"@id": "results/output.txt"}],
+                "startTime": "2026-01-18T10:00:00+00:00",
+            },
+        ],
+    }
+    assert actual_entities == expected_entities
+
+
+def test_files_in_nested_subdirectories(
+    tmp_path: Path, sample_argument_parser: ArgumentParser
+) -> None:
+    """Test recording with files in nested subdirectories using absolute paths."""
+    parser = sample_argument_parser
+    crate_dir = tmp_path
+
+    # Create nested subdirectories
+    input_dir = crate_dir / "data" / "nested"
+    input_dir.mkdir(parents=True)
+    output_dir = crate_dir / "results" / "processed"
+    output_dir.mkdir(parents=True)
+
+    # Create input file in nested subdirectory
+    input_path = input_dir / "input.txt"
+    input_path.write_text("Nested data\n")
+
+    # Define output path in nested subdirectory
+    output_path = output_dir / "output.txt"
+
+    args = [
+        "--input",
+        str(input_path),
+        "--output",
+        str(output_path),
+    ]
+    ns = parser.parse_args(args)
+
+    # Simulate the script's main operation
+    output_path.write_text(input_path.read_text().upper())
+
+    start_time = datetime(2026, 1, 18, 11, 0, 0, tzinfo=UTC)
+    end_time = datetime(2026, 1, 18, 11, 0, 5, tzinfo=UTC)
+
+    crate_meta = record_with_argparse(
+        parser=parser,
+        ns=ns,
+        ios=IOs(
+            input_files=["input"],
+            output_files=["output"],
+        ),
+        start_time=start_time,
+        crate_dir=crate_dir,
+        argv=["myscript"] + args,
+        current_user="test_user",
+        end_time=end_time,
+        software_version="1.2.3",
+        dataset_license="CC-BY-4.0",
+    )
+
+    actual_entities = json.loads(crate_meta.read_text(encoding="utf-8"))
+    expected_entities = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [
+            {
+                "@id": "./",
+                "@type": "Dataset",
+                "datePublished": "2026-01-18T11:00:05+00:00",
+                "hasPart": [
+                    {"@id": "data/nested/input.txt"},
+                    {"@id": "results/processed/output.txt"},
+                ],
+                "license": "CC-BY-4.0",
+            },
+            {
+                "@id": "ro-crate-metadata.json",
+                "@type": "CreativeWork",
+                "about": {"@id": "./"},
+                "conformsTo": {"@id": "https://w3id.org/ro/crate/1.1"},
+            },
+            {
+                "@id": "myscript@1.2.3",
+                "@type": "SoftwareApplication",
+                "description": "Example CLI",
+                "name": "myscript",
+                "version": "1.2.3",
+            },
+            {
+                "@id": "data/nested/input.txt",
+                "@type": "File",
+                "contentSize": 12,
+                "description": "Input file",
+                "encodingFormat": "text/plain",
+                "name": "data/nested/input.txt",
+            },
+            {
+                "@id": "results/processed/output.txt",
+                "@type": "File",
+                "contentSize": 12,
+                "description": "Output file",
+                "encodingFormat": "text/plain",
+                "name": "results/processed/output.txt",
+            },
+            {"@id": "test_user", "@type": "Person", "name": "test_user"},
+            {
+                "@id": f"myscript --input {input_path} --output {output_path}",
+                "@type": "CreateAction",
+                "agent": {"@id": "test_user"},
+                "endTime": "2026-01-18T11:00:05+00:00",
+                "instrument": {"@id": "myscript@1.2.3"},
+                "name": f"myscript --input {input_path} --output {output_path}",
+                "object": [{"@id": "data/nested/input.txt"}],
+                "result": [{"@id": "results/processed/output.txt"}],
+                "startTime": "2026-01-18T11:00:00+00:00",
+            },
+        ],
+    }
+    assert actual_entities == expected_entities
+
+
+def test_nesteddirs(tmp_path: Path) -> None:
+    """Test recording with nested directories in --input-dir and --output-dir arguments.
+
+    Simulates copying files from nested input dir to nested output dir with uppercased content.
+    """
+    parser = ArgumentParser(prog="dirprocessor", description="Process directories")
+    parser.add_argument("--input-dir", type=Path, help="Input directory")
+    parser.add_argument("--output-dir", type=Path, help="Output directory")
+
+    crate_dir = tmp_path
+    input_dir = crate_dir / "input" / "nested"
+    output_dir = crate_dir / "output" / "processed"
+
+    # Create nested input directory with some files
+    input_dir.mkdir(parents=True)
+    (input_dir / "file1.txt").write_text("hello world\n")
+    (input_dir / "file2.txt").write_text("foo bar\n")
+
+    # Create nested output directory
+    output_dir.mkdir(parents=True)
+
+    args = [
+        "--input-dir",
+        str(input_dir),
+        "--output-dir",
+        str(output_dir),
+    ]
+    ns = parser.parse_args(args)
+
+    # Simulate the script's main operation: copy files with uppercased names and contents
+    for file_path in input_dir.iterdir():
+        if file_path.is_file():
+            uppercase_name = file_path.name.upper()
+            uppercase_content = file_path.read_text().upper()
+            (output_dir / uppercase_name).write_text(uppercase_content)
+
+    start_time = datetime(2026, 1, 18, 12, 0, 0, tzinfo=UTC)
+    end_time = datetime(2026, 1, 18, 12, 0, 10, tzinfo=UTC)
+
+    crate_meta = record_with_argparse(
+        parser=parser,
+        ns=ns,
+        ios=IOs(
+            input_dirs=["input_dir"],
+            output_dirs=["output_dir"],
+        ),
+        start_time=start_time,
+        crate_dir=crate_dir,
+        argv=["dirprocessor"] + args,
+        current_user="test_user",
+        end_time=end_time,
+        software_version="1.0.0",
+        dataset_license="CC-BY-4.0",
+    )
+
+    actual_entities = json.loads(crate_meta.read_text(encoding="utf-8"))
+    expected_entities = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [
+            {
+                "@id": "./",
+                "@type": "Dataset",
+                "datePublished": "2026-01-18T12:00:10+00:00",
+                "hasPart": [{"@id": "input/nested/"}, {"@id": "output/processed/"}],
+                "license": "CC-BY-4.0",
+            },
+            {
+                "@id": "ro-crate-metadata.json",
+                "@type": "CreativeWork",
+                "about": {"@id": "./"},
+                "conformsTo": {"@id": "https://w3id.org/ro/crate/1.1"},
+            },
+            {
+                "@id": "dirprocessor@1.0.0",
+                "@type": "SoftwareApplication",
+                "description": "Process directories",
+                "name": "dirprocessor",
+                "version": "1.0.0",
+            },
+            {"@id": "input/nested/", "@type": "Dataset", "name": "input/nested"},
+            {
+                "@id": "output/processed/",
+                "@type": "Dataset",
+                "name": "output/processed",
+            },
+            {"@id": "test_user", "@type": "Person", "name": "test_user"},
+            {
+                "@id": f"dirprocessor --input-dir {input_dir} --output-dir {output_dir}",
+                "@type": "CreateAction",
+                "agent": {"@id": "test_user"},
+                "endTime": "2026-01-18T12:00:10+00:00",
+                "instrument": {"@id": "dirprocessor@1.0.0"},
+                "name": f"dirprocessor --input-dir {input_dir} --output-dir {output_dir}",
+                "object": [{"@id": "input/nested/"}],
+                "result": [{"@id": "output/processed/"}],
+                "startTime": "2026-01-18T12:00:00+00:00",
+            },
+        ],
+    }
+    assert actual_entities == expected_entities
+
+
 def test_aargparse_value2path_stdin_handling():
     parser = argparse.ArgumentParser()
     parser.add_argument("infile", type=argparse.FileType("r"))
@@ -962,5 +1281,4 @@ def test_aargparse_value2path_stdin_handling():
     # causes `alueError: I/O operation on closed file.` while in pytest
 
 
-# TODO add test that has files in subdirectories
 # TODO add test that checks sub commands in argparse (e.g. git commit)

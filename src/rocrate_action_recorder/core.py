@@ -347,7 +347,8 @@ def add_file(crate: ROCrate, crate_root: Path, ioarg: IOArgument) -> File:
         return existing_file
     file = File(
         crate,
-        identifier,
+        source=path,
+        dest_path=identifier,
         properties={
             "name": identifier,
             "description": ioarg.help,
