@@ -8,6 +8,8 @@ import mimetypes
 import os
 import pwd
 from pathlib import Path
+import shutil
+import subprocess
 import sys
 from shlex import quote
 
@@ -53,10 +55,10 @@ class IOArgs:
 
 
 def detect_software_version(program_name: str) -> str:
-    """Detect software version from package name.
+    """Detect software version from package name or executable.
 
     Args:
-        program_name: Name of the program/package.
+        program_name: Name of the program/package or path to executable.
 
     Returns:
         Version string if found, otherwise empty string.
@@ -64,13 +66,55 @@ def detect_software_version(program_name: str) -> str:
     # try to use program name as package name
     try:
         software_version = importlib.metadata.version(program_name)
+        # TODO check if metadata has more software info like homepage, license
     except importlib.metadata.PackageNotFoundError:
         software_version = ""
+
+    if not software_version:
+        software_version = _dectect_version_by_running(program_name)
+    
     if not software_version:
         # TODO try to determine package from caller frame?
         pass
-    # TODO try swapping dashes and underscores in program name?
     return software_version
+
+def _dectect_version_by_running(program_name: str) -> str:
+    """Try to detect version by running the program with --version flag.
+
+    Args:
+        program_name: Name of the program or path to executable.
+
+    Returns:
+        Version string if found, otherwise empty string.
+    """
+    # First try as a direct file path
+    program_path = Path(program_name)
+    if program_path.is_file() and os.access(program_path, os.X_OK):
+        executable = str(program_path)
+    else:
+        # Try to find the program in PATH
+        executable = shutil.which(program_name)
+        if not executable:
+            return ""
+
+    try:
+        result = subprocess.run(
+            [executable, "--version"],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        if result.stdout:
+            output = result.stdout.strip()
+            # Remove script name from output by taking the last space-separated token
+            parts = output.split()
+            if len(parts) > 1:
+                return parts[-1]
+            else:
+                return output
+    except (subprocess.TimeoutExpired, subprocess.SubprocessError, FileNotFoundError):
+        pass
+    return ""
 
 
 def make_action_id(argv: list[str] | None = None) -> str:
@@ -512,6 +556,7 @@ def _update_crate(
     crate.datePublished = end_time
     return crate
 
-# TODO add `def playback(crate_root: Path) -> str` function 
+
+# TODO add `def playback(crate_root: Path) -> str` function
 # that prints names of UpdateActions
 # and can be used to re-run the recorded actions

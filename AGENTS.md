@@ -14,6 +14,7 @@ uv build                 # Build package
 - ruff
 - use type hints everywhere
 - Google style docstrings, in docstring to not repeat type as they are in function signature.
+- test naming: `test_<function under test>_<given>`
 
 ## Important
 
@@ -22,3 +23,4 @@ uv build                 # Build package
 - Put imports at top of file not inside functions
 - Prefer to start with empty function bodies then write tests and then write code (TDD)
 - When function has more than 5 arguments, call it with named arguments for clarity
+- When writing tests, prefer realistic data over mocks where possible

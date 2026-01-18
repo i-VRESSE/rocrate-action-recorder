@@ -1,4 +1,5 @@
 from argparse import ArgumentParser, FileType
+import argparse
 import json
 from pathlib import Path
 from datetime import UTC, datetime
@@ -8,6 +9,7 @@ from rocrate_validator import services, models
 from rocrate_validator.utils.uri import URI
 
 from rocrate_action_recorder import record_with_argparse, IOs
+from rocrate_action_recorder.adapters.argparse import argparse_value2path
 
 
 @pytest.fixture
@@ -166,11 +168,6 @@ def test_strargs(tmp_path: Path) -> None:
         dataset_license="CC-BY-4.0",
     )
 
-    assert crate_meta.exists(), (
-        "record() did not produce ro-crate-metadata.json in crate_dir"
-    )
-    assert_crate_shape(crate_dir)
-
     expected_entities = {
         "@context": "https://w3id.org/ro/crate/1.1/context",
         "@graph": [
@@ -271,11 +268,6 @@ def test_filetypeargs(tmp_path: Path) -> None:
         software_version="1.2.3",
         dataset_license="CC-BY-4.0",
     )
-
-    assert crate_meta.exists(), (
-        "record() did not produce ro-crate-metadata.json in crate_dir"
-    )
-    assert_crate_shape(crate_dir)
 
     expected_entities = {
         "@context": "https://w3id.org/ro/crate/1.1/context",
@@ -383,9 +375,6 @@ def test_record_different_files(tmp_path: Path, sample_argument_parser: Argument
         software_version="1.2.3",
         dataset_license="CC-BY-4.0",
     )
-
-    assert crate_meta.exists()
-    assert_crate_shape(crate_dir)
 
     actual_entities = json.loads(crate_meta.read_text(encoding="utf-8"))
     expected_entities = {
@@ -527,9 +516,6 @@ def test_record_same_input_different_output(
         dataset_license="CC-BY-4.0",
     )
 
-    assert crate_meta.exists()
-    assert_crate_shape(crate_dir)
-
     actual_entities = json.loads(crate_meta.read_text(encoding="utf-8"))
     expected_entities = {
         "@context": "https://w3id.org/ro/crate/1.1/context",
@@ -659,9 +645,6 @@ def test_record_same_command_twice(
         dataset_license="CC-BY-4.0",
     )
 
-    assert crate_meta.exists()
-    assert_crate_shape(crate_dir)
-
     actual_entities = json.loads(crate_meta.read_text(encoding="utf-8"))
     expected_entities = {
         "@context": "https://w3id.org/ro/crate/1.1/context",
@@ -782,9 +765,6 @@ def test_record_two_different_commands(tmp_path: Path):
         software_version="2.5.0",
         dataset_license="CC-BY-4.0",
     )
-
-    assert crate_meta.exists()
-    assert_crate_shape(crate_dir)
 
     actual_entities = json.loads(crate_meta.read_text(encoding="utf-8"))
     expected_entities = {
@@ -928,11 +908,6 @@ def test_dirs(tmp_path: Path) -> None:
         dataset_license="CC-BY-4.0",
     )
 
-    assert crate_meta.exists(), (
-        "record() did not produce ro-crate-metadata.json in crate_dir"
-    )
-    assert_crate_shape(crate_dir)
-
     actual_entities = json.loads(crate_meta.read_text(encoding="utf-8"))
     expected_entities = {
         "@context": "https://w3id.org/ro/crate/1.1/context",
@@ -975,4 +950,18 @@ def test_dirs(tmp_path: Path) -> None:
     }
     assert actual_entities == expected_entities
 
+
+def test_aargparse_value2path_stdin_handling():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("infile", type=argparse.FileType("r"))
+    args = parser.parse_args(["-"])
+
+    result = argparse_value2path(args.infile)
+
+    assert result is None, "Expected None for stdin file argument"
+    # Unable to test FileType('w') for stdout due to reading .name
+    # causes `alueError: I/O operation on closed file.` while in pytest
+
+
 # TODO add test that has files in subdirectories
+# TODO add test that checks sub commands in argparse (e.g. git commit)

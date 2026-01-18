@@ -42,7 +42,12 @@ def argparse_value2path(v: Any) -> Path | None:
     if isinstance(v, Path):
         return v
     elif hasattr(v, "name"):
-        if v.name == "<stdin>" or v.name == "<stdout>" or v.name == '-':
+        if (
+            v.name is None
+            or v.name == "<stdin>"
+            or v.name == "<stdout>"
+            or v.name == "-"
+        ):
             # TODO add test for it
             return None
         return Path(v.name)
