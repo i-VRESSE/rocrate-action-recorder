@@ -27,7 +27,6 @@ def assert_crate_shape(crate_dir: Path) -> None:
         profile_identifier="process-run-crate",
         requirement_severity=models.Severity.RECOMMENDED,
     )
-    # TODO the validator is slow (~0.9s), make faster or call less often
     result = services.validate(settings)
     assert result.passed()
 
