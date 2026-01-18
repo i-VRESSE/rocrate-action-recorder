@@ -9,7 +9,10 @@ from rocrate_validator import services, models
 from rocrate_validator.utils.uri import URI
 
 from rocrate_action_recorder import record_with_argparse, IOs
-from rocrate_action_recorder.adapters.argparse import argparse_value2path, argparse_info
+from rocrate_action_recorder.adapters.argparse import (
+    argparse_value2paths,
+    argparse_info,
+)
 from rocrate_action_recorder.core import Info, Program, IOArgument
 
 
@@ -24,7 +27,7 @@ def sample_argument_parser() -> ArgumentParser:
 def assert_crate_shape(crate_dir: Path) -> None:
     settings = models.ValidationSettings(
         rocrate_uri=URI(crate_dir),
-        # TODO use more comprehensive provenance-run-crate profile
+        # TODO use more comprehensive provenance-run-crate profile, see https://w3id.org/ro/wfrun/provenance
         profile_identifier="process-run-crate",
         requirement_severity=models.Severity.RECOMMENDED,
     )
@@ -1477,14 +1480,14 @@ def test_nesteddirs(tmp_path: Path) -> None:
     assert actual_entities == expected_entities
 
 
-def test_aargparse_value2path_stdin_handling():
+def test_aargparse_value2paths_stdin_handling():
     parser = argparse.ArgumentParser()
     parser.add_argument("infile", type=argparse.FileType("r"))
     args = parser.parse_args(["-"])
 
-    result = argparse_value2path(args.infile)
+    result = argparse_value2paths(args.infile)
 
-    assert result is None, "Expected None for stdin file argument"
+    assert result == [], "Expected empty list for stdin file argument"
     # Unable to test FileType('w') for stdout due to reading .name
     # causes `alueError: I/O operation on closed file.` while in pytest
 
@@ -1514,11 +1517,11 @@ def test_argparse_info_subcommand_single_level(tmp_path: Path) -> None:
             subcommands={"commit": Program(name="git commit", description="")},
         ),
         ioarguments={
-            "command": IOArgument(name="command", path=Path("commit"), help=""),
-            "input": IOArgument(name="input", path=input_path, help="File to commit"),
-            "output": IOArgument(
-                name="output", path=output_path, help="Commit log file"
-            ),
+            "command": [IOArgument(name="command", path=Path("commit"), help="")],
+            "input": [IOArgument(name="input", path=input_path, help="File to commit")],
+            "output": [
+                IOArgument(name="output", path=output_path, help="Commit log file")
+            ],
         },
     )
     assert info == expected
@@ -1561,12 +1564,12 @@ def test_argparse_info_subcommand_nested_levels(tmp_path: Path) -> None:
             },
         ),
         ioarguments={
-            "command": IOArgument(name="command", path=Path("remote"), help=""),
-            "action": IOArgument(name="action", path=Path("add"), help=""),
-            "input": IOArgument(name="input", path=input_path, help="Config file"),
-            "output": IOArgument(
-                name="output", path=output_path, help="Updated config"
-            ),
+            "command": [IOArgument(name="command", path=Path("remote"), help="")],
+            "action": [IOArgument(name="action", path=Path("add"), help="")],
+            "input": [IOArgument(name="input", path=input_path, help="Config file")],
+            "output": [
+                IOArgument(name="output", path=output_path, help="Updated config")
+            ],
         },
     )
     assert info == expected
@@ -1718,13 +1721,470 @@ def test_argparse_info_subcommand_with_parent_flags(tmp_path: Path) -> None:
             subcommands={"status": Program(name="git status", description="")},
         ),
         ioarguments={
-            "command": IOArgument(name="command", path=Path("status"), help=""),
-            "input": IOArgument(
-                name="input", path=input_path, help="Repository directory"
-            ),
-            "output": IOArgument(
-                name="output", path=output_path, help="Status output file"
-            ),
+            "command": [IOArgument(name="command", path=Path("status"), help="")],
+            "input": [
+                IOArgument(name="input", path=input_path, help="Repository directory")
+            ],
+            "output": [
+                IOArgument(name="output", path=output_path, help="Status output file")
+            ],
+        },
+    )
+    assert info == expected
+
+
+def test_argparse_info_nargs_star_empty():
+    """Test argparse_info with nargs='*' and no values provided."""
+    parser = ArgumentParser(prog="processor", description="Process files")
+    parser.add_argument("--inputs", nargs="*", type=Path, help="Input files")
+    ns = parser.parse_args([])
+
+    info = argparse_info(ns, parser)
+
+    expected = Info(
+        program=Program(
+            name="processor",
+            description="Process files",
+        ),
+        ioarguments={},
+    )
+    assert info == expected
+
+
+def test_argparse_info_nargs_star_single():
+    """Test argparse_info with nargs='*' and single value provided."""
+    parser = ArgumentParser(prog="processor", description="Process files")
+    parser.add_argument("--inputs", nargs="*", type=Path, help="Input files")
+    input_file = Path("input.txt")
+    ns = parser.parse_args(["--inputs", str(input_file)])
+
+    info = argparse_info(ns, parser)
+
+    expected = Info(
+        program=Program(
+            name="processor",
+            description="Process files",
+        ),
+        ioarguments={
+            "inputs": [IOArgument(name="inputs", path=input_file, help="Input files")]
+        },
+    )
+    assert info == expected
+
+
+def test_argparse_info_nargs_star_multiple():
+    """Test argparse_info with nargs='*' and multiple values provided."""
+    parser = ArgumentParser(prog="processor", description="Process files")
+    parser.add_argument("--inputs", nargs="*", type=Path, help="Input files")
+    input_files = [Path("file1.txt"), Path("file2.txt"), Path("file3.txt")]
+    ns = parser.parse_args(["--inputs"] + [str(f) for f in input_files])
+
+    info = argparse_info(ns, parser)
+
+    expected = Info(
+        program=Program(
+            name="processor",
+            description="Process files",
+        ),
+        ioarguments={
+            "inputs": [
+                IOArgument(name="inputs", path=input_files[0], help="Input files"),
+                IOArgument(name="inputs", path=input_files[1], help="Input files"),
+                IOArgument(name="inputs", path=input_files[2], help="Input files"),
+            ]
+        },
+    )
+    assert info == expected
+
+
+def test_argparse_info_action_append_multiple():
+    """Test argparse_info with action='append' and multiple values provided."""
+    parser = ArgumentParser(prog="processor", description="Process files")
+    parser.add_argument("--inputs", action="append", type=Path, help="Input files")
+    input_files = [Path("file1.txt"), Path("file2.txt"), Path("file3.txt")]
+    ns = parser.parse_args(
+        [
+            "--inputs",
+            str(input_files[0]),
+            "--inputs",
+            str(input_files[1]),
+            "--inputs",
+            str(input_files[2]),
+        ]
+    )
+
+    info = argparse_info(ns, parser)
+
+    expected = Info(
+        program=Program(
+            name="processor",
+            description="Process files",
+        ),
+        ioarguments={
+            "inputs": [
+                IOArgument(name="inputs", path=input_files[0], help="Input files"),
+                IOArgument(name="inputs", path=input_files[1], help="Input files"),
+                IOArgument(name="inputs", path=input_files[2], help="Input files"),
+            ]
+        },
+    )
+    assert info == expected
+
+
+def test_argparse_info_action_extend_multiple():
+    """Test argparse_info with action='extend' and multiple values provided."""
+    parser = ArgumentParser(prog="processor", description="Process files")
+    parser.add_argument(
+        "--inputs", action="extend", nargs="+", type=Path, help="Input files"
+    )
+    input_files = [Path("file1.txt"), Path("file2.txt"), Path("file3.txt")]
+    ns = parser.parse_args(
+        [
+            "--inputs",
+            str(input_files[0]),
+            str(input_files[1]),
+            "--inputs",
+            str(input_files[2]),
+        ]
+    )
+
+    info = argparse_info(ns, parser)
+
+    expected = Info(
+        program=Program(
+            name="processor",
+            description="Process files",
+        ),
+        ioarguments={
+            "inputs": [
+                IOArgument(name="inputs", path=input_files[0], help="Input files"),
+                IOArgument(name="inputs", path=input_files[1], help="Input files"),
+                IOArgument(name="inputs", path=input_files[2], help="Input files"),
+            ]
+        },
+    )
+    assert info == expected
+
+
+def test_argparse_info_nargs_star_with_duplicates():
+    """Test argparse_info with nargs='*' and duplicate paths provided."""
+    parser = ArgumentParser(prog="processor", description="Process files")
+    parser.add_argument("--inputs", nargs="*", type=Path, help="Input files")
+    input_files = [Path("file1.txt"), Path("file1.txt"), Path("file2.txt")]
+    ns = parser.parse_args(["--inputs"] + [str(f) for f in input_files])
+
+    info = argparse_info(ns, parser)
+
+    expected = Info(
+        program=Program(
+            name="processor",
+            description="Process files",
+        ),
+        ioarguments={
+            "inputs": [
+                IOArgument(name="inputs", path=Path("file1.txt"), help="Input files"),
+                IOArgument(name="inputs", path=Path("file2.txt"), help="Input files"),
+            ]
+        },
+    )
+    assert info == expected
+
+
+def test_argparse_info_nargs_plus_single():
+    """Test argparse_info with nargs='+' and single value provided."""
+    parser = ArgumentParser(prog="processor", description="Process files")
+    parser.add_argument("--inputs", nargs="+", type=Path, help="Input files")
+    input_file = Path("input.txt")
+    ns = parser.parse_args(["--inputs", str(input_file)])
+
+    info = argparse_info(ns, parser)
+
+    expected = Info(
+        program=Program(
+            name="processor",
+            description="Process files",
+        ),
+        ioarguments={
+            "inputs": [IOArgument(name="inputs", path=input_file, help="Input files")]
+        },
+    )
+    assert info == expected
+
+
+def test_argparse_info_nargs_plus_multiple():
+    """Test argparse_info with nargs='+' and multiple values provided."""
+    parser = ArgumentParser(prog="processor", description="Process files")
+    parser.add_argument("--inputs", nargs="+", type=Path, help="Input files")
+    input_files = [Path("file1.txt"), Path("file2.txt"), Path("file3.txt")]
+    ns = parser.parse_args(["--inputs"] + [str(f) for f in input_files])
+
+    info = argparse_info(ns, parser)
+
+    expected = Info(
+        program=Program(
+            name="processor",
+            description="Process files",
+        ),
+        ioarguments={
+            "inputs": [
+                IOArgument(name="inputs", path=input_files[0], help="Input files"),
+                IOArgument(name="inputs", path=input_files[1], help="Input files"),
+                IOArgument(name="inputs", path=input_files[2], help="Input files"),
+            ]
+        },
+    )
+    assert info == expected
+
+
+def test_argparse_info_nargs_int():
+    """Test argparse_info with nargs=2 (specific count)."""
+    parser = ArgumentParser(prog="processor", description="Process files")
+    parser.add_argument("--inputs", nargs=2, type=Path, help="Input files")
+    input_files = [Path("file1.txt"), Path("file2.txt")]
+    ns = parser.parse_args(["--inputs"] + [str(f) for f in input_files])
+
+    info = argparse_info(ns, parser)
+
+    expected = Info(
+        program=Program(
+            name="processor",
+            description="Process files",
+        ),
+        ioarguments={
+            "inputs": [
+                IOArgument(name="inputs", path=input_files[0], help="Input files"),
+                IOArgument(name="inputs", path=input_files[1], help="Input files"),
+            ]
+        },
+    )
+    assert info == expected
+
+
+def test_argparse_info_nargs_question_with_value():
+    """Test argparse_info with nargs='?' and value provided."""
+    parser = ArgumentParser(prog="processor", description="Process files")
+    parser.add_argument("--input", nargs="?", type=Path, help="Input file")
+    input_file = Path("input.txt")
+    ns = parser.parse_args(["--input", str(input_file)])
+
+    info = argparse_info(ns, parser)
+
+    expected = Info(
+        program=Program(
+            name="processor",
+            description="Process files",
+        ),
+        ioarguments={
+            "input": [IOArgument(name="input", path=input_file, help="Input file")]
+        },
+    )
+    assert info == expected
+
+
+def test_argparse_info_nargs_question_without_value():
+    """Test argparse_info with nargs='?' and no value provided."""
+    parser = ArgumentParser(prog="processor", description="Process files")
+    parser.add_argument("--input", nargs="?", type=Path, help="Input file")
+    ns = parser.parse_args([])
+
+    info = argparse_info(ns, parser)
+
+    expected = Info(
+        program=Program(
+            name="processor",
+            description="Process files",
+        ),
+        ioarguments={},
+    )
+    assert info == expected
+
+
+def test_argparse_info_multiple_args_same_file(tmp_path: Path) -> None:
+    """Test record_with_argparse with multiple arguments pointing to the same file.
+
+    Verifies that when the same file is referenced by different arguments
+    (--input and --ref both pointing to file1.txt), the crate is created correctly
+    with the file appearing only once in the object array.
+    """
+    parser = ArgumentParser(prog="processor", description="Process files")
+    parser.add_argument("--input", type=Path, help="Input file")
+    parser.add_argument("--ref", type=Path, help="Reference file")
+
+    crate_dir = tmp_path
+    shared_file = crate_dir / "file1.txt"
+    shared_file.write_text("Shared content\n")
+
+    args = ["--input", str(shared_file), "--ref", str(shared_file)]
+    ns = parser.parse_args(args)
+
+    start_time = datetime(2026, 1, 19, 10, 0, 0, tzinfo=UTC)
+    end_time = datetime(2026, 1, 19, 10, 0, 5, tzinfo=UTC)
+
+    crate_meta = record_with_argparse(
+        parser=parser,
+        ns=ns,
+        ios=IOs(
+            input_files=["input", "ref"],
+        ),
+        start_time=start_time,
+        crate_dir=crate_dir,
+        argv=["processor"] + args,
+        current_user="test_user",
+        end_time=end_time,
+        software_version="1.0.0",
+        dataset_license="CC-BY-4.0",
+    )
+
+    actual_entities = json.loads(crate_meta.read_text(encoding="utf-8"))
+    expected_entities = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [
+            {
+                "@id": "./",
+                "@type": "Dataset",
+                "datePublished": "2026-01-19T10:00:05+00:00",
+                "hasPart": [{"@id": "file1.txt"}],
+                "license": "CC-BY-4.0",
+            },
+            {
+                "@id": "ro-crate-metadata.json",
+                "@type": "CreativeWork",
+                "about": {"@id": "./"},
+                "conformsTo": {"@id": "https://w3id.org/ro/crate/1.1"},
+            },
+            {
+                "@id": "processor@1.0.0",
+                "@type": "SoftwareApplication",
+                "description": "Process files",
+                "name": "processor",
+                "version": "1.0.0",
+            },
+            {
+                "@id": "file1.txt",
+                "@type": "File",
+                "contentSize": 15,
+                "description": "Reference file",
+                "encodingFormat": "text/plain",
+                "name": "file1.txt",
+            },
+            {"@id": "test_user", "@type": "Person", "name": "test_user"},
+            {
+                "@id": f"processor --input {shared_file} --ref {shared_file}",
+                "@type": "CreateAction",
+                "agent": {"@id": "test_user"},
+                "endTime": "2026-01-19T10:00:05+00:00",
+                "instrument": {"@id": "processor@1.0.0"},
+                "name": f"processor --input {shared_file} --ref {shared_file}",
+                "object": [{"@id": "file1.txt"}],
+                "startTime": "2026-01-19T10:00:00+00:00",
+            },
+        ],
+    }
+    assert actual_entities == expected_entities
+
+
+def test_argparse_info_positional_args():
+    """Test argparse_info with positional arguments (input.txt output.txt)."""
+    parser = ArgumentParser(
+        prog="myscript", description="Process input and generate output"
+    )
+    parser.add_argument("input", type=Path, help="Input file")
+    parser.add_argument("output", type=Path, help="Output file")
+
+    input_file = Path("input.txt")
+    output_file = Path("output.txt")
+    ns = parser.parse_args([str(input_file), str(output_file)])
+
+    info = argparse_info(ns, parser)
+
+    expected = Info(
+        program=Program(
+            name="myscript",
+            description="Process input and generate output",
+        ),
+        ioarguments={
+            "input": [IOArgument(name="input", path=input_file, help="Input file")],
+            "output": [IOArgument(name="output", path=output_file, help="Output file")],
+        },
+    )
+    assert info == expected
+
+
+def test_argparse_info_arg_with_default():
+    parser = ArgumentParser(
+        prog="myscript", description="Process input and generate output"
+    )
+    parser.add_argument(
+        "--input", type=Path, default=Path("input.txt"), help="Input file"
+    )
+
+    # Don't provide input, it will use default
+    ns = parser.parse_args([])
+
+    info = argparse_info(ns, parser)
+
+    expected = Info(
+        program=Program(
+            name="myscript",
+            description="Process input and generate output",
+        ),
+        ioarguments={
+            "input": [
+                IOArgument(name="input", path=Path("input.txt"), help="Input file")
+            ],
+        },
+    )
+    assert info == expected
+
+
+def test_argparse_info_args_with_dest():
+    """Test argparse_info with arguments using custom dest names."""
+    parser = ArgumentParser(
+        prog="myscript", description="Process input and generate output"
+    )
+    parser.add_argument("--input", dest="myinput", type=Path, help="Input file")
+    parser.add_argument("--output", dest="myoutput", type=Path, help="Output file")
+
+    input_file = Path("input.txt")
+    output_file = Path("output.txt")
+    ns = parser.parse_args(["--input", str(input_file), "--output", str(output_file)])
+
+    info = argparse_info(ns, parser)
+
+    expected = Info(
+        program=Program(
+            name="myscript",
+            description="Process input and generate output",
+        ),
+        ioarguments={
+            "myinput": [IOArgument(name="myinput", path=input_file, help="Input file")],
+            "myoutput": [
+                IOArgument(name="myoutput", path=output_file, help="Output file")
+            ],
+        },
+    )
+    assert info == expected
+
+
+def test_argparse_info_args_with_flags():
+    """Test argparse_info with arguments using short and long flags."""
+    parser = ArgumentParser(
+        prog="myscript", description="Process input and generate output"
+    )
+    parser.add_argument("-i", "--input", type=Path, help="Input file")
+
+    input_file = Path("input.txt")
+    ns = parser.parse_args(["-i", str(input_file)])
+
+    info = argparse_info(ns, parser)
+
+    expected = Info(
+        program=Program(
+            name="myscript",
+            description="Process input and generate output",
+        ),
+        ioarguments={
+            "input": [IOArgument(name="input", path=input_file, help="Input file")],
         },
     )
     assert info == expected

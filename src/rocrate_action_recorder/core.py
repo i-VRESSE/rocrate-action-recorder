@@ -16,7 +16,7 @@ from shlex import quote
 from rocrate.model import File
 from rocrate.model.dataset import Dataset
 from rocrate.model.person import Person
-from rocrate.rocrate import ROCrate, SoftwareApplication, Metadata
+from rocrate.rocrate import Entity, ROCrate, SoftwareApplication, Metadata
 
 
 @dataclass
@@ -36,7 +36,7 @@ class IOArgument:
 @dataclass
 class Info:
     program: Program
-    ioarguments: dict[str, IOArgument]
+    ioarguments: dict[str, list[IOArgument]]
 
 
 @dataclass
@@ -122,6 +122,25 @@ def _dectect_version_by_running(program_name: str) -> str:
     return ""
 
 
+def _collect_ioargs(
+    argument_names: list[str], ioarguments: dict[str, list[IOArgument]]
+) -> list[IOArgument]:
+    """Collect IOArguments for the given argument names.
+
+    Args:
+        argument_names: List of argument names to match.
+        ioarguments: Dictionary mapping argument names to lists of IOArguments.
+
+    Returns:
+        List of IOArgument objects for the matching argument names.
+    """
+    args = []
+    for argument_name in argument_names:
+        if argument_name in ioarguments:
+            args.extend(ioarguments[argument_name])
+    return args
+
+
 def make_action_id(argv: list[str] | None = None) -> str:
     """Create an action ID from command-line arguments.
 
@@ -194,18 +213,10 @@ def record(
     software_version = software_version or detect_software_version(info.program.name)
 
     ioargs = IOArgs(
-        input_files=[
-            info.ioarguments[f] for f in ios.input_files if f in info.ioarguments
-        ],
-        output_files=[
-            info.ioarguments[f] for f in ios.output_files if f in info.ioarguments
-        ],
-        input_dirs=[
-            info.ioarguments[d] for d in ios.input_dirs if d in info.ioarguments
-        ],
-        output_dirs=[
-            info.ioarguments[d] for d in ios.output_dirs if d in info.ioarguments
-        ],
+        input_files=_collect_ioargs(ios.input_files, info.ioarguments),
+        output_files=_collect_ioargs(ios.output_files, info.ioarguments),
+        input_dirs=_collect_ioargs(ios.input_dirs, info.ioarguments),
+        output_dirs=_collect_ioargs(ios.output_dirs, info.ioarguments),
     )
 
     return _record_run(
@@ -506,6 +517,24 @@ def _record_run(
     return metadata_file
 
 
+def _unique_by_id[T: Entity](entities: list[T]) -> list[T]:
+    """Get unique entities based on their IDs.
+
+    Args:
+        entities: List of entities.
+
+    Returns:
+        List of unique entities.
+    """
+    seen_ids = set()
+    unique_entities = []
+    for entity in entities:
+        if entity.id not in seen_ids:
+            seen_ids.add(entity.id)
+            unique_entities.append(entity)
+    return unique_entities
+
+
 def _update_crate(
     crate: ROCrate,
     crate_root: Path,
@@ -552,8 +581,8 @@ def _update_crate(
         start_time=start_time,
         end_time=end_time,
         software=software,
-        all_inputs=all_inputs,
-        all_outputs=all_outputs,
+        all_inputs=_unique_by_id(all_inputs),
+        all_outputs=_unique_by_id(all_outputs),
         agent=agent,
     )
 
