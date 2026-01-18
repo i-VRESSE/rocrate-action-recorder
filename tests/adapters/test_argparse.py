@@ -126,6 +126,103 @@ def test_onein_oneout_abspaths(tmp_path: Path, sample_argument_parser: ArgumentP
     assert actual_entities == expected_entities
 
 
+def test_onein_oneout_relpaths(
+    tmp_path: Path, sample_argument_parser: ArgumentParser, monkeypatch
+):
+    parser = sample_argument_parser
+    crate_dir = tmp_path
+    input_path = crate_dir / "input.txt"
+    output_path = crate_dir / "output.txt"
+    input_path.write_text("Hello World\n")
+
+    # Change to crate directory so relative paths resolve correctly
+    monkeypatch.chdir(crate_dir)
+
+    args = [
+        "--input",
+        "input.txt",
+        "--output",
+        "output.txt",
+    ]
+    ns = parser.parse_args(args)
+    # Simulate the script's main operation
+    output_path.write_text(input_path.read_text().upper())
+    start_time = datetime(2026, 1, 16, 12, 0, 0, tzinfo=UTC)
+    end_time = datetime(2026, 1, 16, 12, 0, 5, tzinfo=UTC)
+
+    crate_meta = record_with_argparse(
+        parser=parser,
+        ns=ns,
+        ios=IOs(
+            input_files=["input"],
+            output_files=["output"],
+        ),
+        start_time=start_time,
+        crate_dir=crate_dir,
+        argv=["myscript"] + args,
+        current_user="test_user",
+        end_time=end_time,
+        software_version="1.2.3",
+        dataset_license="CC-BY-4.0",
+    )
+
+    expected_entities = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [
+            {
+                "@id": "./",
+                "@type": "Dataset",
+                "datePublished": "2026-01-16T12:00:05+00:00",
+                "hasPart": [{"@id": "input.txt"}, {"@id": "output.txt"}],
+                "license": "CC-BY-4.0",
+            },
+            {
+                "@id": "ro-crate-metadata.json",
+                "@type": "CreativeWork",
+                "about": {"@id": "./"},
+                "conformsTo": {"@id": "https://w3id.org/ro/crate/1.1"},
+            },
+            {
+                "@id": "myscript@1.2.3",
+                "@type": "SoftwareApplication",
+                "description": "Example CLI",
+                "name": "myscript",
+                "version": "1.2.3",
+            },
+            {
+                "@id": "input.txt",
+                "@type": "File",
+                "contentSize": 12,
+                "description": "Input file",
+                "encodingFormat": "text/plain",
+                "name": "input.txt",
+            },
+            {
+                "@id": "output.txt",
+                "@type": "File",
+                "contentSize": 12,
+                "description": "Output file",
+                "encodingFormat": "text/plain",
+                "name": "output.txt",
+            },
+            {"@id": "test_user", "@type": "Person", "name": "test_user"},
+            {
+                "@id": "myscript --input input.txt --output output.txt",
+                "@type": "CreateAction",
+                "agent": {"@id": "test_user"},
+                "endTime": "2026-01-16T12:00:05+00:00",
+                "instrument": {"@id": "myscript@1.2.3"},
+                "name": "myscript --input input.txt --output output.txt",
+                "object": [{"@id": "input.txt"}],
+                "result": [{"@id": "output.txt"}],
+                "startTime": "2026-01-16T12:00:00+00:00",
+            },
+        ],
+    }
+    actual_entities = json.loads(crate_meta.read_text(encoding="utf-8"))
+    assert actual_entities == expected_entities
+
+
 def test_strargs(tmp_path: Path) -> None:
     parser = ArgumentParser(prog="myscript", description="Example CLI")
     # Use str types instead of Path
@@ -1048,6 +1145,116 @@ def test_files_in_single_level_subdirectories(
                 "endTime": "2026-01-18T10:00:05+00:00",
                 "instrument": {"@id": "myscript@1.2.3"},
                 "name": f"myscript --input {input_path} --output {output_path}",
+                "object": [{"@id": "data/input.txt"}],
+                "result": [{"@id": "results/output.txt"}],
+                "startTime": "2026-01-18T10:00:00+00:00",
+            },
+        ],
+    }
+    assert actual_entities == expected_entities
+
+
+def test_files_in_single_level_subdirectories_relpaths(
+    tmp_path: Path, sample_argument_parser: ArgumentParser, monkeypatch
+) -> None:
+    """Test recording with files in single-level subdirectories using relative paths."""
+    parser = sample_argument_parser
+    crate_dir = tmp_path
+
+    # Create subdirectories
+    input_dir = crate_dir / "data"
+    input_dir.mkdir()
+    output_dir = crate_dir / "results"
+    output_dir.mkdir()
+
+    # Create input file in subdirectory
+    input_path = input_dir / "input.txt"
+    input_path.write_text("Hello from subdirectory\n")
+
+    # Define output path in subdirectory
+    output_path = output_dir / "output.txt"
+
+    # Change to crate directory so relative paths resolve correctly
+    monkeypatch.chdir(crate_dir)
+
+    args = [
+        "--input",
+        "data/input.txt",
+        "--output",
+        "results/output.txt",
+    ]
+    ns = parser.parse_args(args)
+
+    # Simulate the script's main operation
+    output_path.write_text(input_path.read_text().upper())
+
+    start_time = datetime(2026, 1, 18, 10, 0, 0, tzinfo=UTC)
+    end_time = datetime(2026, 1, 18, 10, 0, 5, tzinfo=UTC)
+
+    crate_meta = record_with_argparse(
+        parser=parser,
+        ns=ns,
+        ios=IOs(
+            input_files=["input"],
+            output_files=["output"],
+        ),
+        start_time=start_time,
+        crate_dir=crate_dir,
+        argv=["myscript"] + args,
+        current_user="test_user",
+        end_time=end_time,
+        software_version="1.2.3",
+        dataset_license="CC-BY-4.0",
+    )
+
+    actual_entities = json.loads(crate_meta.read_text(encoding="utf-8"))
+    expected_entities = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [
+            {
+                "@id": "./",
+                "@type": "Dataset",
+                "datePublished": "2026-01-18T10:00:05+00:00",
+                "hasPart": [{"@id": "data/input.txt"}, {"@id": "results/output.txt"}],
+                "license": "CC-BY-4.0",
+            },
+            {
+                "@id": "ro-crate-metadata.json",
+                "@type": "CreativeWork",
+                "about": {"@id": "./"},
+                "conformsTo": {"@id": "https://w3id.org/ro/crate/1.1"},
+            },
+            {
+                "@id": "myscript@1.2.3",
+                "@type": "SoftwareApplication",
+                "description": "Example CLI",
+                "name": "myscript",
+                "version": "1.2.3",
+            },
+            {
+                "@id": "data/input.txt",
+                "@type": "File",
+                "contentSize": 24,
+                "description": "Input file",
+                "encodingFormat": "text/plain",
+                "name": "data/input.txt",
+            },
+            {
+                "@id": "results/output.txt",
+                "@type": "File",
+                "contentSize": 24,
+                "description": "Output file",
+                "encodingFormat": "text/plain",
+                "name": "results/output.txt",
+            },
+            {"@id": "test_user", "@type": "Person", "name": "test_user"},
+            {
+                "@id": "myscript --input data/input.txt --output results/output.txt",
+                "@type": "CreateAction",
+                "agent": {"@id": "test_user"},
+                "endTime": "2026-01-18T10:00:05+00:00",
+                "instrument": {"@id": "myscript@1.2.3"},
+                "name": "myscript --input data/input.txt --output results/output.txt",
                 "object": [{"@id": "data/input.txt"}],
                 "result": [{"@id": "results/output.txt"}],
                 "startTime": "2026-01-18T10:00:00+00:00",
