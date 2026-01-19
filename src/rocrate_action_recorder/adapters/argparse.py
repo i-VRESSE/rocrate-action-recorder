@@ -84,6 +84,22 @@ def argparse_value2paths(v: Any) -> list[Path]:
     return deduplicated
 
 
+def version_from_parser(parser: ArgumentParser) -> str | None:
+    """Attempt to extract version information from an ArgumentParser.
+
+    Args:
+        parser: The ArgumentParser instance.
+    Returns:
+        The version string if found, otherwise None.
+    """
+    for action in parser._actions:
+        if getattr(action, "version", None):
+            return (
+                action.version.replace("%(prog)s", "").replace(parser.prog, "").strip()
+            )
+    return None
+
+
 def argparse_info(args: Namespace, parser: ArgumentParser) -> Info:
     """Extract program and IO information from argparse results.
 

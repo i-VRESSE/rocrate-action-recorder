@@ -12,6 +12,7 @@ from rocrate_action_recorder import record_with_argparse, IOs
 from rocrate_action_recorder.adapters.argparse import (
     argparse_value2paths,
     argparse_info,
+    version_from_parser,
 )
 from rocrate_action_recorder.core import Info, Program, IOArgument
 
@@ -2188,3 +2189,14 @@ def test_argparse_info_args_with_flags():
         },
     )
     assert info == expected
+
+
+def test_version_from_parser():
+    parser = ArgumentParser(
+        prog="myscript", description="Process input and generate output"
+    )
+    parser.add_argument("--version", action="version", version="%(prog)s 2.0.1'")
+
+    version = version_from_parser(parser)
+
+    assert version == "2.0.1"
