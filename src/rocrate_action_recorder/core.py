@@ -12,11 +12,14 @@ import shutil
 import subprocess
 import sys
 from shlex import quote
+import logging
 
 from rocrate.model import File
 from rocrate.model.dataset import Dataset
 from rocrate.model.person import Person
 from rocrate.rocrate import Entity, ROCrate, SoftwareApplication, Metadata
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -186,6 +189,7 @@ def record(
         software_version: Optional version string of the software. If None, attempts to
             detect it automatically.
         dataset_license: Optional license string to set for the RO-Crate dataset.
+            For example "CC-BY-4.0".
 
     Returns:
         Path to the generated ro-crate-metadata.json file.
@@ -218,6 +222,11 @@ def record(
         input_dirs=_collect_ioargs(ios.input_dirs, info.ioarguments),
         output_dirs=_collect_ioargs(ios.output_dirs, info.ioarguments),
     )
+
+    if not dataset_license:
+        logger.warning(
+            "No dataset license specified for the RO-Crate. This will lead to invalid crates. Consider setting a license like 'CC-BY-4.0'."
+        )
 
     return _record_run(
         crate_root=crate_root,
@@ -589,6 +598,12 @@ def _update_crate(
     if dataset_license:
         crate.license = dataset_license
     crate.datePublished = end_time
+
+    if not crate.name:
+        crate.name = f"Files used by {program.name}"
+    if not crate.description:
+        crate.description = f"An RO-Crate recording the files and directories that were used as input or output by {program.name}."
+
     return crate
 
 

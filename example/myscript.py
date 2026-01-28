@@ -24,6 +24,7 @@ def handler(args, parser):
         ns=args,
         ios=ios,
         start_time=start_time,
+        dataset_license="CC-BY-4.0",
     )
 
 

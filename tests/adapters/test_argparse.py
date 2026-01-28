@@ -30,7 +30,10 @@ def assert_crate_shape(crate_dir: Path):
         rocrate_uri=URI(crate_dir),
         # TODO use more comprehensive provenance-run-crate profile, see https://w3id.org/ro/wfrun/provenance
         profile_identifier="process-run-crate",
+        # TODO when running validator on cli and example with -m recommended it fails, 
+        # but here it passes? that is weird
         requirement_severity=models.Severity.RECOMMENDED,
+        verbose=True
     )
     result = services.validate(settings)
     assert result.passed()
@@ -86,6 +89,8 @@ class Test_record_with_argparse:
                     "datePublished": "2026-01-16T12:00:05+00:00",
                     "hasPart": [{"@id": "input.txt"}, {"@id": "output.txt"}],
                     "license": "CC-BY-4.0",
+                    "name": "Files used by myscript",
+                    "description": "An RO-Crate recording the files and directories that were used as input or output by myscript.",
                 },
                 {
                     "@id": "ro-crate-metadata.json",
@@ -182,6 +187,8 @@ class Test_record_with_argparse:
                     "datePublished": "2026-01-16T12:00:05+00:00",
                     "hasPart": [{"@id": "input.txt"}, {"@id": "output.txt"}],
                     "license": "CC-BY-4.0",
+                    "name": "Files used by myscript",
+                    "description": "An RO-Crate recording the files and directories that were used as input or output by myscript.",
                 },
                 {
                     "@id": "ro-crate-metadata.json",
@@ -279,6 +286,8 @@ class Test_record_with_argparse:
                     "datePublished": "2026-01-16T12:00:05+00:00",
                     "hasPart": [{"@id": "input.txt"}, {"@id": "output.txt"}],
                     "license": "CC-BY-4.0",
+                    "name": "Files used by myscript",
+                    "description": "An RO-Crate recording the files and directories that were used as input or output by myscript.",
                 },
                 {
                     "@id": "ro-crate-metadata.json",
@@ -379,6 +388,8 @@ class Test_record_with_argparse:
                     "datePublished": "2026-01-16T12:00:05+00:00",
                     "hasPart": [{"@id": "input.txt"}, {"@id": "output.txt"}],
                     "license": "CC-BY-4.0",
+                    "name": "Files used by myscript",
+                    "description": "An RO-Crate recording the files and directories that were used as input or output by myscript.",
                 },
                 {
                     "@id": "ro-crate-metadata.json",
@@ -493,6 +504,8 @@ class Test_record_with_argparse:
                         {"@id": "output2.txt"},
                     ],
                     "license": "CC-BY-4.0",
+                    "name": "Files used by myscript",
+                    "description": "An RO-Crate recording the files and directories that were used as input or output by myscript.",
                 },
                 {
                     "@id": "ro-crate-metadata.json",
@@ -631,6 +644,8 @@ class Test_record_with_argparse:
                         {"@id": "output2.txt"},
                     ],
                     "license": "CC-BY-4.0",
+                    "name": "Files used by myscript",
+                    "description": "An RO-Crate recording the files and directories that were used as input or output by myscript.",
                 },
                 {
                     "@id": "ro-crate-metadata.json",
@@ -755,6 +770,8 @@ class Test_record_with_argparse:
                     "datePublished": "2026-01-16T14:00:15+00:00",
                     "hasPart": [{"@id": "input.txt"}, {"@id": "output.txt"}],
                     "license": "CC-BY-4.0",
+                    "name": "Files used by myscript",
+                    "description": "An RO-Crate recording the files and directories that were used as input or output by myscript.",
                 },
                 {
                     "@id": "ro-crate-metadata.json",
@@ -879,6 +896,8 @@ class Test_record_with_argparse:
                         {"@id": "analysis.json"},
                     ],
                     "license": "CC-BY-4.0",
+                    "name": "Files used by converter",
+                    "description": "An RO-Crate recording the files and directories that were used as input or output by converter.",
                 },
                 {
                     "@id": "ro-crate-metadata.json",
@@ -1016,6 +1035,8 @@ class Test_record_with_argparse:
                     "datePublished": "2026-01-17T13:00:10+00:00",
                     "hasPart": [{"@id": "input/"}, {"@id": "output/"}],
                     "license": "CC-BY-4.0",
+                    "name": "Files used by dirprocessor",
+                    "description": "An RO-Crate recording the files and directories that were used as input or output by dirprocessor.",
                 },
                 {
                     "@id": "ro-crate-metadata.json",
@@ -1111,6 +1132,8 @@ class Test_record_with_argparse:
                         {"@id": "results/output.txt"},
                     ],
                     "license": "CC-BY-4.0",
+                    "name": "Files used by myscript",
+                    "description": "An RO-Crate recording the files and directories that were used as input or output by myscript.",
                 },
                 {
                     "@id": "ro-crate-metadata.json",
@@ -1223,6 +1246,8 @@ class Test_record_with_argparse:
                         {"@id": "results/output.txt"},
                     ],
                     "license": "CC-BY-4.0",
+                    "name": "Files used by myscript",
+                    "description": "An RO-Crate recording the files and directories that were used as input or output by myscript.",
                 },
                 {
                     "@id": "ro-crate-metadata.json",
@@ -1332,6 +1357,8 @@ class Test_record_with_argparse:
                         {"@id": "results/processed/output.txt"},
                     ],
                     "license": "CC-BY-4.0",
+                    "name": "Files used by myscript",
+                    "description": "An RO-Crate recording the files and directories that were used as input or output by myscript.",
                 },
                 {
                     "@id": "ro-crate-metadata.json",
@@ -1443,6 +1470,8 @@ class Test_record_with_argparse:
                     "datePublished": "2026-01-18T12:00:10+00:00",
                     "hasPart": [{"@id": "input/nested/"}, {"@id": "output/processed/"}],
                     "license": "CC-BY-4.0",
+                    "name": "Files used by dirprocessor",
+                    "description": "An RO-Crate recording the files and directories that were used as input or output by dirprocessor.",
                 },
                 {
                     "@id": "ro-crate-metadata.json",
@@ -1619,6 +1648,8 @@ class Test_record_with_argparse:
                     "datePublished": "2026-01-19T10:00:05+00:00",
                     "hasPart": [{"@id": "file1.txt"}],
                     "license": "CC-BY-4.0",
+                    "name": "Files used by processor",
+                    "description": "An RO-Crate recording the files and directories that were used as input or output by processor.",
                 },
                 {
                     "@id": "ro-crate-metadata.json",
@@ -1687,6 +1718,8 @@ class Test_record_with_argparse:
                     "@type": "Dataset",
                     "datePublished": "2026-01-16T12:00:05+00:00",
                     "license": "CC-BY-4.0",
+                    "name": "Files used by myscript",
+                    "description": "An RO-Crate recording the files and directories that were used as input or output by myscript.",
                 },
                 {
                     "@id": "ro-crate-metadata.json",
