@@ -161,3 +161,7 @@ See the [example](example/) folder for a minimal example.
 ### Contributions
 
 See [AGENTS.md](AGENTS.md) for commands and hints for contributions.
+
+### Citation
+
+See [CITATION.cff](CITATION.cff) for citation information.

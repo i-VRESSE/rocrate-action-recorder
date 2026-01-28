@@ -1,6 +1,6 @@
 [project]
 name = "rocrate-action-recorder"
-description = "Add your description here"
+description = "Record calls of Python CLI commands into a Research Object Crate"
 readme = "README.md"
 authors = [
     { name = "Stefan Verhoeven", email = "stefan.verhoeven@gmail.com" }
