@@ -90,7 +90,7 @@ def assert_crate_contents(
             },
         ]
         + custom_entities,
-    }   
+    }
     if has_part:
         expected["@graph"][0]["hasPart"] = has_part
     actual = json.loads(crate_meta.read_text(encoding="utf-8"))
@@ -674,7 +674,6 @@ class Test_record_with_argparse:
                     "about": {"@id": "./"},
                     "conformsTo": {"@id": "https://w3id.org/ro/crate/1.1"},
                 },
-            
                 {
                     "@id": "data.txt",
                     "@type": "File",
@@ -691,7 +690,7 @@ class Test_record_with_argparse:
                     "encodingFormat": "text/plain",
                     "name": "output1.txt",
                 },
-                                {
+                {
                     "@id": "https://w3id.org/ro/wfrun/process/0.5",
                     "@type": "CreativeWork",
                     "name": "Process Run Crate",
@@ -790,17 +789,18 @@ class Test_record_with_argparse:
 
         actual_entities = json.loads(crate_meta.read_text(encoding="utf-8"))
         expected_entities = {
-                       "@context": [
+            "@context": [
                 "https://w3id.org/ro/crate/1.1/context",
                 "https://w3id.org/ro/terms/workflow-run/context",
-            ], "@graph": [
+            ],
+            "@graph": [
                 {
                     "@id": "./",
                     "@type": "Dataset",
                     "datePublished": "2026-01-16T14:00:15+00:00",
                     "hasPart": [{"@id": "input.txt"}, {"@id": "output.txt"}],
                     "license": "CC-BY-4.0",
-                     "conformsTo": {
+                    "conformsTo": {
                         "@id": "https://w3id.org/ro/wfrun/process/0.5",
                     },
                     "name": "Files used by myscript",
@@ -828,7 +828,7 @@ class Test_record_with_argparse:
                     "encodingFormat": "text/plain",
                     "name": "output.txt",
                 },
-                                {
+                {
                     "@id": "https://w3id.org/ro/wfrun/process/0.5",
                     "@type": "CreativeWork",
                     "name": "Process Run Crate",
@@ -923,10 +923,11 @@ class Test_record_with_argparse:
 
         actual_entities = json.loads(crate_meta.read_text(encoding="utf-8"))
         expected_entities = {
-                      "@context": [
+            "@context": [
                 "https://w3id.org/ro/crate/1.1/context",
                 "https://w3id.org/ro/terms/workflow-run/context",
-            ],  "@graph": [
+            ],
+            "@graph": [
                 {
                     "@id": "./",
                     "@type": "Dataset",
@@ -937,7 +938,7 @@ class Test_record_with_argparse:
                         {"@id": "analysis.json"},
                     ],
                     "license": "CC-BY-4.0",
-                                   "conformsTo": {
+                    "conformsTo": {
                         "@id": "https://w3id.org/ro/wfrun/process/0.5",
                     },
                     "name": "Files used by converter",
@@ -965,7 +966,7 @@ class Test_record_with_argparse:
                     "encodingFormat": "text/plain",
                     "name": "converted.txt",
                 },
-                                {
+                {
                     "@id": "https://w3id.org/ro/wfrun/process/0.5",
                     "@type": "CreativeWork",
                     "name": "Process Run Crate",
