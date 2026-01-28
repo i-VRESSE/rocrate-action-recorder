@@ -29,14 +29,72 @@ def assert_crate_shape(crate_dir: Path):
     settings = models.ValidationSettings(
         rocrate_uri=URI(crate_dir),
         # TODO use more comprehensive provenance-run-crate profile, see https://w3id.org/ro/wfrun/provenance
-        profile_identifier="process-run-crate",
-        # TODO when running validator on cli and example with -m recommended it fails, 
-        # but here it passes? that is weird
-        requirement_severity=models.Severity.RECOMMENDED,
-        verbose=True
+        # now uses process run crate profile, see https://www.researchobject.org/workflow-run-crate/profiles/0.5/process_run_crate/
+        # TODO when running validator on cli and example with -m recommended it fails,
+        # but here with same severity it passes? that is weird
+        requirement_severity=models.Severity.REQUIRED,
+        verbose=True,
     )
     result = services.validate(settings)
     assert result.passed()
+
+
+def assert_crate_contents(
+    crate_meta: Path,
+    program_name: str,
+    end_time: datetime,
+    has_part: list = [],
+    custom_entities: list = [],
+):
+    """Assert that the crate metadata json file contains the expected entities.
+
+    Args:
+        crate_meta: Path to the ro-crate-metadata.json file.
+        program_name: Name of the program recorded in the crate.
+        end_time: End time of the program execution.
+        has_part: List of entities that should be listed as parts of the dataset. Defaults to [].
+        custom_entities: List of additional custom entities expected in the crate. Defaults to [].
+    """
+    expected = {
+        "@context": [
+            "https://w3id.org/ro/crate/1.1/context",
+            "https://w3id.org/ro/terms/workflow-run/context",
+        ],
+        "@graph": [
+            {
+                "@id": "./",
+                "@type": "Dataset",
+                "datePublished": end_time.isoformat(),
+                "conformsTo": {
+                    "@id": "https://w3id.org/ro/wfrun/process/0.5",
+                },
+                "license": "CC-BY-4.0",
+                "name": f"Files used by {program_name}",
+                "description": f"An RO-Crate recording the files and directories that were used as input or output by {program_name}.",
+            },
+            {
+                "@id": "ro-crate-metadata.json",
+                "@type": "CreativeWork",
+                "about": {
+                    "@id": "./",
+                },
+                "conformsTo": {
+                    "@id": "https://w3id.org/ro/crate/1.1",
+                },
+            },
+            {
+                "@id": "https://w3id.org/ro/wfrun/process/0.5",
+                "@type": "CreativeWork",
+                "name": "Process Run Crate",
+                "version": "0.5",
+            },
+        ]
+        + custom_entities,
+    }   
+    if has_part:
+        expected["@graph"][0]["hasPart"] = has_part
+    actual = json.loads(crate_meta.read_text(encoding="utf-8"))
+    assert actual == expected
 
 
 class Test_record_with_argparse:
@@ -80,24 +138,12 @@ class Test_record_with_argparse:
             "record() did not produce ro-crate-metadata.json in crate_dir"
         )
         assert_crate_shape(crate_dir)
-        expected_entities = {
-            "@context": "https://w3id.org/ro/crate/1.1/context",
-            "@graph": [
-                {
-                    "@id": "./",
-                    "@type": "Dataset",
-                    "datePublished": "2026-01-16T12:00:05+00:00",
-                    "hasPart": [{"@id": "input.txt"}, {"@id": "output.txt"}],
-                    "license": "CC-BY-4.0",
-                    "name": "Files used by myscript",
-                    "description": "An RO-Crate recording the files and directories that were used as input or output by myscript.",
-                },
-                {
-                    "@id": "ro-crate-metadata.json",
-                    "@type": "CreativeWork",
-                    "about": {"@id": "./"},
-                    "conformsTo": {"@id": "https://w3id.org/ro/crate/1.1"},
-                },
+        assert_crate_contents(
+            crate_meta=crate_meta,
+            program_name="myscript",
+            end_time=end_time,
+            has_part=[{"@id": "input.txt"}, {"@id": "output.txt"}],
+            custom_entities=[
                 {
                     "@id": "myscript@1.2.3",
                     "@type": "SoftwareApplication",
@@ -126,17 +172,15 @@ class Test_record_with_argparse:
                     "@id": f"myscript --input {input_path} --output {output_path}",
                     "@type": "CreateAction",
                     "agent": {"@id": "test_user"},
-                    "endTime": "2026-01-16T12:00:05+00:00",
+                    "endTime": end_time.isoformat(),
                     "instrument": {"@id": "myscript@1.2.3"},
                     "name": f"myscript --input {input_path} --output {output_path}",
                     "object": [{"@id": "input.txt"}],
                     "result": [{"@id": "output.txt"}],
-                    "startTime": "2026-01-16T12:00:00+00:00",
+                    "startTime": start_time.isoformat(),
                 },
             ],
-        }
-        actual_entities = json.loads(crate_meta.read_text(encoding="utf-8"))
-        assert actual_entities == expected_entities
+        )
 
     def test_record_with_argparseonein_oneout_relpaths(
         self, tmp_path: Path, sample_argument_parser: ArgumentParser, monkeypatch
@@ -178,24 +222,12 @@ class Test_record_with_argparse:
             dataset_license="CC-BY-4.0",
         )
 
-        expected_entities = {
-            "@context": "https://w3id.org/ro/crate/1.1/context",
-            "@graph": [
-                {
-                    "@id": "./",
-                    "@type": "Dataset",
-                    "datePublished": "2026-01-16T12:00:05+00:00",
-                    "hasPart": [{"@id": "input.txt"}, {"@id": "output.txt"}],
-                    "license": "CC-BY-4.0",
-                    "name": "Files used by myscript",
-                    "description": "An RO-Crate recording the files and directories that were used as input or output by myscript.",
-                },
-                {
-                    "@id": "ro-crate-metadata.json",
-                    "@type": "CreativeWork",
-                    "about": {"@id": "./"},
-                    "conformsTo": {"@id": "https://w3id.org/ro/crate/1.1"},
-                },
+        assert_crate_contents(
+            crate_meta=crate_meta,
+            program_name="myscript",
+            end_time=end_time,
+            has_part=[{"@id": "input.txt"}, {"@id": "output.txt"}],
+            custom_entities=[
                 {
                     "@id": "myscript@1.2.3",
                     "@type": "SoftwareApplication",
@@ -224,19 +256,17 @@ class Test_record_with_argparse:
                     "@id": "myscript --input input.txt --output output.txt",
                     "@type": "CreateAction",
                     "agent": {"@id": "test_user"},
-                    "endTime": "2026-01-16T12:00:05+00:00",
+                    "endTime": end_time.isoformat(),
                     "instrument": {"@id": "myscript@1.2.3"},
                     "name": "myscript --input input.txt --output output.txt",
                     "object": [{"@id": "input.txt"}],
                     "result": [{"@id": "output.txt"}],
-                    "startTime": "2026-01-16T12:00:00+00:00",
+                    "startTime": start_time.isoformat(),
                 },
             ],
-        }
-        actual_entities = json.loads(crate_meta.read_text(encoding="utf-8"))
-        assert actual_entities == expected_entities
+        )
 
-    def test_rstrargs(self, tmp_path: Path):
+    def test_str_args(self, tmp_path: Path):
         parser = ArgumentParser(prog="myscript", description="Example CLI")
         # Use str types instead of Path
         parser.add_argument("--input", type=str, help="Input file")
@@ -277,24 +307,12 @@ class Test_record_with_argparse:
             dataset_license="CC-BY-4.0",
         )
 
-        expected_entities = {
-            "@context": "https://w3id.org/ro/crate/1.1/context",
-            "@graph": [
-                {
-                    "@id": "./",
-                    "@type": "Dataset",
-                    "datePublished": "2026-01-16T12:00:05+00:00",
-                    "hasPart": [{"@id": "input.txt"}, {"@id": "output.txt"}],
-                    "license": "CC-BY-4.0",
-                    "name": "Files used by myscript",
-                    "description": "An RO-Crate recording the files and directories that were used as input or output by myscript.",
-                },
-                {
-                    "@id": "ro-crate-metadata.json",
-                    "@type": "CreativeWork",
-                    "about": {"@id": "./"},
-                    "conformsTo": {"@id": "https://w3id.org/ro/crate/1.1"},
-                },
+        assert_crate_contents(
+            crate_meta=crate_meta,
+            program_name="myscript",
+            end_time=end_time,
+            has_part=[{"@id": "input.txt"}, {"@id": "output.txt"}],
+            custom_entities=[
                 {
                     "@id": "myscript@1.2.3",
                     "@type": "SoftwareApplication",
@@ -323,19 +341,17 @@ class Test_record_with_argparse:
                     "@id": f"myscript --input {input_path} --output {output_path}",
                     "@type": "CreateAction",
                     "agent": {"@id": "test_user"},
-                    "endTime": "2026-01-16T12:00:05+00:00",
+                    "endTime": end_time.isoformat(),
                     "instrument": {"@id": "myscript@1.2.3"},
                     "name": f"myscript --input {input_path} --output {output_path}",
                     "object": [{"@id": "input.txt"}],
                     "result": [{"@id": "output.txt"}],
-                    "startTime": "2026-01-16T12:00:00+00:00",
+                    "startTime": start_time.isoformat(),
                 },
             ],
-        }
-        actual_entities = json.loads(crate_meta.read_text(encoding="utf-8"))
-        assert actual_entities == expected_entities
+        )
 
-    def test_rfiletypeargs(self, tmp_path: Path):
+    def test_filetype_args(self, tmp_path: Path):
         parser = ArgumentParser(prog="myscript", description="Example CLI")
         # Use str types instead of Path
         parser.add_argument("--input", type=FileType("r"), help="Input file")
@@ -379,24 +395,12 @@ class Test_record_with_argparse:
             dataset_license="CC-BY-4.0",
         )
 
-        expected_entities = {
-            "@context": "https://w3id.org/ro/crate/1.1/context",
-            "@graph": [
-                {
-                    "@id": "./",
-                    "@type": "Dataset",
-                    "datePublished": "2026-01-16T12:00:05+00:00",
-                    "hasPart": [{"@id": "input.txt"}, {"@id": "output.txt"}],
-                    "license": "CC-BY-4.0",
-                    "name": "Files used by myscript",
-                    "description": "An RO-Crate recording the files and directories that were used as input or output by myscript.",
-                },
-                {
-                    "@id": "ro-crate-metadata.json",
-                    "@type": "CreativeWork",
-                    "about": {"@id": "./"},
-                    "conformsTo": {"@id": "https://w3id.org/ro/crate/1.1"},
-                },
+        assert_crate_contents(
+            crate_meta=crate_meta,
+            program_name="myscript",
+            end_time=end_time,
+            has_part=[{"@id": "input.txt"}, {"@id": "output.txt"}],
+            custom_entities=[
                 {
                     "@id": "myscript@1.2.3",
                     "@type": "SoftwareApplication",
@@ -425,19 +429,17 @@ class Test_record_with_argparse:
                     "@id": f"myscript --input {input_path} --output {output_path}",
                     "@type": "CreateAction",
                     "agent": {"@id": "test_user"},
-                    "endTime": "2026-01-16T12:00:05+00:00",
+                    "endTime": end_time.isoformat(),
                     "instrument": {"@id": "myscript@1.2.3"},
                     "name": f"myscript --input {input_path} --output {output_path}",
                     "object": [{"@id": "input.txt"}],
                     "result": [{"@id": "output.txt"}],
-                    "startTime": "2026-01-16T12:00:00+00:00",
+                    "startTime": start_time.isoformat(),
                 },
             ],
-        }
-        actual_entities = json.loads(crate_meta.read_text(encoding="utf-8"))
-        assert actual_entities == expected_entities
+        )
 
-    def test_rdifferent_files(
+    def test_twice_different_files(
         self, tmp_path: Path, sample_argument_parser: ArgumentParser
     ):
         parser = sample_argument_parser
@@ -489,9 +491,14 @@ class Test_record_with_argparse:
             dataset_license="CC-BY-4.0",
         )
 
+        # Cannot use assert_crate_contents here because of the create and update of json file
+
         actual_entities = json.loads(crate_meta.read_text(encoding="utf-8"))
         expected_entities = {
-            "@context": "https://w3id.org/ro/crate/1.1/context",
+            "@context": [
+                "https://w3id.org/ro/crate/1.1/context",
+                "https://w3id.org/ro/terms/workflow-run/context",
+            ],
             "@graph": [
                 {
                     "@id": "./",
@@ -504,6 +511,9 @@ class Test_record_with_argparse:
                         {"@id": "output2.txt"},
                     ],
                     "license": "CC-BY-4.0",
+                    "conformsTo": {
+                        "@id": "https://w3id.org/ro/wfrun/process/0.5",
+                    },
                     "name": "Files used by myscript",
                     "description": "An RO-Crate recording the files and directories that were used as input or output by myscript.",
                 },
@@ -528,6 +538,12 @@ class Test_record_with_argparse:
                     "description": "Output file",
                     "encodingFormat": "text/plain",
                     "name": "output.txt",
+                },
+                {
+                    "@id": "https://w3id.org/ro/wfrun/process/0.5",
+                    "@type": "CreativeWork",
+                    "name": "Process Run Crate",
+                    "version": "0.5",
                 },
                 {
                     "@id": "myscript@1.2.3",
@@ -609,7 +625,6 @@ class Test_record_with_argparse:
             dataset_license="CC-BY-4.0",
         )
 
-        # Second run: same input, process to output2.txt
         output2_path = crate_dir / "output2.txt"
         args2 = ["--input", str(input_path), "--output", str(output2_path)]
         ns2 = parser.parse_args(args2)
@@ -632,7 +647,10 @@ class Test_record_with_argparse:
 
         actual_entities = json.loads(crate_meta.read_text(encoding="utf-8"))
         expected_entities = {
-            "@context": "https://w3id.org/ro/crate/1.1/context",
+            "@context": [
+                "https://w3id.org/ro/crate/1.1/context",
+                "https://w3id.org/ro/terms/workflow-run/context",
+            ],
             "@graph": [
                 {
                     "@id": "./",
@@ -644,6 +662,9 @@ class Test_record_with_argparse:
                         {"@id": "output2.txt"},
                     ],
                     "license": "CC-BY-4.0",
+                    "conformsTo": {
+                        "@id": "https://w3id.org/ro/wfrun/process/0.5",
+                    },
                     "name": "Files used by myscript",
                     "description": "An RO-Crate recording the files and directories that were used as input or output by myscript.",
                 },
@@ -653,6 +674,7 @@ class Test_record_with_argparse:
                     "about": {"@id": "./"},
                     "conformsTo": {"@id": "https://w3id.org/ro/crate/1.1"},
                 },
+            
                 {
                     "@id": "data.txt",
                     "@type": "File",
@@ -668,6 +690,12 @@ class Test_record_with_argparse:
                     "description": "Output file",
                     "encodingFormat": "text/plain",
                     "name": "output1.txt",
+                },
+                                {
+                    "@id": "https://w3id.org/ro/wfrun/process/0.5",
+                    "@type": "CreativeWork",
+                    "name": "Process Run Crate",
+                    "version": "0.5",
                 },
                 {
                     "@id": "myscript@2.0.0",
@@ -762,14 +790,19 @@ class Test_record_with_argparse:
 
         actual_entities = json.loads(crate_meta.read_text(encoding="utf-8"))
         expected_entities = {
-            "@context": "https://w3id.org/ro/crate/1.1/context",
-            "@graph": [
+                       "@context": [
+                "https://w3id.org/ro/crate/1.1/context",
+                "https://w3id.org/ro/terms/workflow-run/context",
+            ], "@graph": [
                 {
                     "@id": "./",
                     "@type": "Dataset",
                     "datePublished": "2026-01-16T14:00:15+00:00",
                     "hasPart": [{"@id": "input.txt"}, {"@id": "output.txt"}],
                     "license": "CC-BY-4.0",
+                     "conformsTo": {
+                        "@id": "https://w3id.org/ro/wfrun/process/0.5",
+                    },
                     "name": "Files used by myscript",
                     "description": "An RO-Crate recording the files and directories that were used as input or output by myscript.",
                 },
@@ -794,6 +827,12 @@ class Test_record_with_argparse:
                     "description": "Output file",
                     "encodingFormat": "text/plain",
                     "name": "output.txt",
+                },
+                                {
+                    "@id": "https://w3id.org/ro/wfrun/process/0.5",
+                    "@type": "CreativeWork",
+                    "name": "Process Run Crate",
+                    "version": "0.5",
                 },
                 {
                     "@id": "myscript@1.0.0",
@@ -884,8 +923,10 @@ class Test_record_with_argparse:
 
         actual_entities = json.loads(crate_meta.read_text(encoding="utf-8"))
         expected_entities = {
-            "@context": "https://w3id.org/ro/crate/1.1/context",
-            "@graph": [
+                      "@context": [
+                "https://w3id.org/ro/crate/1.1/context",
+                "https://w3id.org/ro/terms/workflow-run/context",
+            ],  "@graph": [
                 {
                     "@id": "./",
                     "@type": "Dataset",
@@ -896,6 +937,9 @@ class Test_record_with_argparse:
                         {"@id": "analysis.json"},
                     ],
                     "license": "CC-BY-4.0",
+                                   "conformsTo": {
+                        "@id": "https://w3id.org/ro/wfrun/process/0.5",
+                    },
                     "name": "Files used by converter",
                     "description": "An RO-Crate recording the files and directories that were used as input or output by converter.",
                 },
@@ -920,6 +964,12 @@ class Test_record_with_argparse:
                     "description": "File to analyze",
                     "encodingFormat": "text/plain",
                     "name": "converted.txt",
+                },
+                                {
+                    "@id": "https://w3id.org/ro/wfrun/process/0.5",
+                    "@type": "CreativeWork",
+                    "name": "Process Run Crate",
+                    "version": "0.5",
                 },
                 {
                     "@id": "converter@1.0.0",
@@ -1025,25 +1075,12 @@ class Test_record_with_argparse:
             dataset_license="CC-BY-4.0",
         )
 
-        actual_entities = json.loads(crate_meta.read_text(encoding="utf-8"))
-        expected_entities = {
-            "@context": "https://w3id.org/ro/crate/1.1/context",
-            "@graph": [
-                {
-                    "@id": "./",
-                    "@type": "Dataset",
-                    "datePublished": "2026-01-17T13:00:10+00:00",
-                    "hasPart": [{"@id": "input/"}, {"@id": "output/"}],
-                    "license": "CC-BY-4.0",
-                    "name": "Files used by dirprocessor",
-                    "description": "An RO-Crate recording the files and directories that were used as input or output by dirprocessor.",
-                },
-                {
-                    "@id": "ro-crate-metadata.json",
-                    "@type": "CreativeWork",
-                    "about": {"@id": "./"},
-                    "conformsTo": {"@id": "https://w3id.org/ro/crate/1.1"},
-                },
+        assert_crate_contents(
+            crate_meta=crate_meta,
+            program_name="dirprocessor",
+            end_time=end_time,
+            has_part=[{"@id": "input/"}, {"@id": "output/"}],
+            custom_entities=[
                 {
                     "@id": "dirprocessor@1.0.0",
                     "@type": "SoftwareApplication",
@@ -1066,8 +1103,7 @@ class Test_record_with_argparse:
                     "startTime": "2026-01-17T13:00:00+00:00",
                 },
             ],
-        }
-        assert actual_entities == expected_entities
+        )
 
     def test_rfiles_in_single_level_subdirectories(
         self, tmp_path: Path, sample_argument_parser: ArgumentParser
@@ -1119,28 +1155,12 @@ class Test_record_with_argparse:
             dataset_license="CC-BY-4.0",
         )
 
-        actual_entities = json.loads(crate_meta.read_text(encoding="utf-8"))
-        expected_entities = {
-            "@context": "https://w3id.org/ro/crate/1.1/context",
-            "@graph": [
-                {
-                    "@id": "./",
-                    "@type": "Dataset",
-                    "datePublished": "2026-01-18T10:00:05+00:00",
-                    "hasPart": [
-                        {"@id": "data/input.txt"},
-                        {"@id": "results/output.txt"},
-                    ],
-                    "license": "CC-BY-4.0",
-                    "name": "Files used by myscript",
-                    "description": "An RO-Crate recording the files and directories that were used as input or output by myscript.",
-                },
-                {
-                    "@id": "ro-crate-metadata.json",
-                    "@type": "CreativeWork",
-                    "about": {"@id": "./"},
-                    "conformsTo": {"@id": "https://w3id.org/ro/crate/1.1"},
-                },
+        assert_crate_contents(
+            crate_meta=crate_meta,
+            program_name="myscript",
+            end_time=end_time,
+            has_part=[{"@id": "data/input.txt"}, {"@id": "results/output.txt"}],
+            custom_entities=[
                 {
                     "@id": "myscript@1.2.3",
                     "@type": "SoftwareApplication",
@@ -1177,8 +1197,7 @@ class Test_record_with_argparse:
                     "startTime": "2026-01-18T10:00:00+00:00",
                 },
             ],
-        }
-        assert actual_entities == expected_entities
+        )
 
     def test_rfiles_in_single_level_subdirectories_relpaths(
         self, tmp_path: Path, sample_argument_parser: ArgumentParser, monkeypatch
@@ -1233,28 +1252,15 @@ class Test_record_with_argparse:
             dataset_license="CC-BY-4.0",
         )
 
-        actual_entities = json.loads(crate_meta.read_text(encoding="utf-8"))
-        expected_entities = {
-            "@context": "https://w3id.org/ro/crate/1.1/context",
-            "@graph": [
-                {
-                    "@id": "./",
-                    "@type": "Dataset",
-                    "datePublished": "2026-01-18T10:00:05+00:00",
-                    "hasPart": [
-                        {"@id": "data/input.txt"},
-                        {"@id": "results/output.txt"},
-                    ],
-                    "license": "CC-BY-4.0",
-                    "name": "Files used by myscript",
-                    "description": "An RO-Crate recording the files and directories that were used as input or output by myscript.",
-                },
-                {
-                    "@id": "ro-crate-metadata.json",
-                    "@type": "CreativeWork",
-                    "about": {"@id": "./"},
-                    "conformsTo": {"@id": "https://w3id.org/ro/crate/1.1"},
-                },
+        assert_crate_contents(
+            crate_meta=crate_meta,
+            program_name="myscript",
+            end_time=end_time,
+            has_part=[
+                {"@id": "data/input.txt"},
+                {"@id": "results/output.txt"},
+            ],
+            custom_entities=[
                 {
                     "@id": "myscript@1.2.3",
                     "@type": "SoftwareApplication",
@@ -1291,8 +1297,7 @@ class Test_record_with_argparse:
                     "startTime": "2026-01-18T10:00:00+00:00",
                 },
             ],
-        }
-        assert actual_entities == expected_entities
+        )
 
     def test_rfiles_in_nested_subdirectories(
         self, tmp_path: Path, sample_argument_parser: ArgumentParser
@@ -1344,28 +1349,15 @@ class Test_record_with_argparse:
             dataset_license="CC-BY-4.0",
         )
 
-        actual_entities = json.loads(crate_meta.read_text(encoding="utf-8"))
-        expected_entities = {
-            "@context": "https://w3id.org/ro/crate/1.1/context",
-            "@graph": [
-                {
-                    "@id": "./",
-                    "@type": "Dataset",
-                    "datePublished": "2026-01-18T11:00:05+00:00",
-                    "hasPart": [
-                        {"@id": "data/nested/input.txt"},
-                        {"@id": "results/processed/output.txt"},
-                    ],
-                    "license": "CC-BY-4.0",
-                    "name": "Files used by myscript",
-                    "description": "An RO-Crate recording the files and directories that were used as input or output by myscript.",
-                },
-                {
-                    "@id": "ro-crate-metadata.json",
-                    "@type": "CreativeWork",
-                    "about": {"@id": "./"},
-                    "conformsTo": {"@id": "https://w3id.org/ro/crate/1.1"},
-                },
+        assert_crate_contents(
+            crate_meta=crate_meta,
+            program_name="myscript",
+            end_time=end_time,
+            has_part=[
+                {"@id": "data/nested/input.txt"},
+                {"@id": "results/processed/output.txt"},
+            ],
+            custom_entities=[
                 {
                     "@id": "myscript@1.2.3",
                     "@type": "SoftwareApplication",
@@ -1402,8 +1394,7 @@ class Test_record_with_argparse:
                     "startTime": "2026-01-18T11:00:00+00:00",
                 },
             ],
-        }
-        assert actual_entities == expected_entities
+        )
 
     def test_rnesteddirs(self, tmp_path: Path):
         """Test recording with nested directories in --input-dir and --output-dir arguments.
@@ -1460,25 +1451,12 @@ class Test_record_with_argparse:
             dataset_license="CC-BY-4.0",
         )
 
-        actual_entities = json.loads(crate_meta.read_text(encoding="utf-8"))
-        expected_entities = {
-            "@context": "https://w3id.org/ro/crate/1.1/context",
-            "@graph": [
-                {
-                    "@id": "./",
-                    "@type": "Dataset",
-                    "datePublished": "2026-01-18T12:00:10+00:00",
-                    "hasPart": [{"@id": "input/nested/"}, {"@id": "output/processed/"}],
-                    "license": "CC-BY-4.0",
-                    "name": "Files used by dirprocessor",
-                    "description": "An RO-Crate recording the files and directories that were used as input or output by dirprocessor.",
-                },
-                {
-                    "@id": "ro-crate-metadata.json",
-                    "@type": "CreativeWork",
-                    "about": {"@id": "./"},
-                    "conformsTo": {"@id": "https://w3id.org/ro/crate/1.1"},
-                },
+        assert_crate_contents(
+            crate_meta=crate_meta,
+            program_name="dirprocessor",
+            end_time=end_time,
+            has_part=[{"@id": "input/nested/"}, {"@id": "output/processed/"}],
+            custom_entities=[
                 {
                     "@id": "dirprocessor@1.0.0",
                     "@type": "SoftwareApplication",
@@ -1505,8 +1483,7 @@ class Test_record_with_argparse:
                     "startTime": "2026-01-18T12:00:00+00:00",
                 },
             ],
-        }
-        assert actual_entities == expected_entities
+        )
 
     def test_rsubcommand_multiple_different(self, tmp_path: Path):
         """Test recording multiple different subcommands in the same crate."""
@@ -1638,25 +1615,12 @@ class Test_record_with_argparse:
             dataset_license="CC-BY-4.0",
         )
 
-        actual_entities = json.loads(crate_meta.read_text(encoding="utf-8"))
-        expected_entities = {
-            "@context": "https://w3id.org/ro/crate/1.1/context",
-            "@graph": [
-                {
-                    "@id": "./",
-                    "@type": "Dataset",
-                    "datePublished": "2026-01-19T10:00:05+00:00",
-                    "hasPart": [{"@id": "file1.txt"}],
-                    "license": "CC-BY-4.0",
-                    "name": "Files used by processor",
-                    "description": "An RO-Crate recording the files and directories that were used as input or output by processor.",
-                },
-                {
-                    "@id": "ro-crate-metadata.json",
-                    "@type": "CreativeWork",
-                    "about": {"@id": "./"},
-                    "conformsTo": {"@id": "https://w3id.org/ro/crate/1.1"},
-                },
+        assert_crate_contents(
+            crate_meta=crate_meta,
+            program_name="processor",
+            end_time=end_time,
+            has_part=[{"@id": "file1.txt"}],
+            custom_entities=[
                 {
                     "@id": "processor@1.0.0",
                     "@type": "SoftwareApplication",
@@ -1684,8 +1648,7 @@ class Test_record_with_argparse:
                     "startTime": "2026-01-19T10:00:00+00:00",
                 },
             ],
-        }
-        assert actual_entities == expected_entities
+        )
 
     def test_version_from_parser(self, tmp_path: Path):
         crate_dir = tmp_path
@@ -1709,24 +1672,12 @@ class Test_record_with_argparse:
             end_time=end_time,
             dataset_license="CC-BY-4.0",
         )
-        actual_entities = json.loads(crate_meta.read_text(encoding="utf-8"))
-        expected_entities = {
-            "@context": "https://w3id.org/ro/crate/1.1/context",
-            "@graph": [
-                {
-                    "@id": "./",
-                    "@type": "Dataset",
-                    "datePublished": "2026-01-16T12:00:05+00:00",
-                    "license": "CC-BY-4.0",
-                    "name": "Files used by myscript",
-                    "description": "An RO-Crate recording the files and directories that were used as input or output by myscript.",
-                },
-                {
-                    "@id": "ro-crate-metadata.json",
-                    "@type": "CreativeWork",
-                    "about": {"@id": "./"},
-                    "conformsTo": {"@id": "https://w3id.org/ro/crate/1.1"},
-                },
+
+        assert_crate_contents(
+            crate_meta=crate_meta,
+            program_name="myscript",
+            end_time=end_time,
+            custom_entities=[
                 {
                     "@id": "myscript@3.2.1",
                     "@type": "SoftwareApplication",
@@ -1745,8 +1696,7 @@ class Test_record_with_argparse:
                     "startTime": "2026-01-16T12:00:00+00:00",
                 },
             ],
-        }
-        assert actual_entities == expected_entities
+        )
 
 
 def test_argparse_value2paths_stdin_handling():

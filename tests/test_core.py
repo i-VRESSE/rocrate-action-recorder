@@ -261,7 +261,7 @@ class Test_record:
             ),
             ios=IOs(),
             argv=["test_program"],
-            current_user='test_user',
+            current_user="test_user",
             start_time=start_time,
             end_time=end_time,
             crate_dir=crate_root,
@@ -270,12 +270,18 @@ class Test_record:
 
         actual_entities = json.loads(crate_meta.read_text(encoding="utf-8"))
         expected_entities = {
-            "@context": "https://w3id.org/ro/crate/1.1/context",
+            "@context": [
+                "https://w3id.org/ro/crate/1.1/context",
+                "https://w3id.org/ro/terms/workflow-run/context",
+            ],
             "@graph": [
                 {
                     "@id": "./",
                     "@type": "Dataset",
                     "datePublished": "2026-01-28T11:42:38",
+                    "conformsTo": {
+                        "@id": "https://w3id.org/ro/wfrun/process/0.5",
+                    },
                     "name": "Files used by test_program",
                     "description": "An RO-Crate recording the files and directories that were used as input or output by test_program.",
                 },
@@ -288,6 +294,12 @@ class Test_record:
                     "conformsTo": {
                         "@id": "https://w3id.org/ro/crate/1.1",
                     },
+                },
+                {
+                    "@id": "https://w3id.org/ro/wfrun/process/0.5",
+                    "@type": "CreativeWork",
+                    "name": "Process Run Crate",
+                    "version": "0.5",
                 },
                 {
                     "@id": "test_program@1.0.0",

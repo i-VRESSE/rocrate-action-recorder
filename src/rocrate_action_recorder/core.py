@@ -17,6 +17,7 @@ import logging
 from rocrate.model import File
 from rocrate.model.dataset import Dataset
 from rocrate.model.person import Person
+from rocrate.model.creativework import CreativeWork
 from rocrate.rocrate import Entity, ROCrate, SoftwareApplication, Metadata
 
 logger = logging.getLogger(__name__)
@@ -544,6 +545,43 @@ def _unique_by_id[T: Entity](entities: list[T]) -> list[T]:
     return unique_entities
 
 
+def conform_to_process_run_crate_profile(crate: ROCrate) -> CreativeWork:
+    """Makes crate conform to Process Run Crate profile
+
+    See https://www.researchobject.org/workflow-run-crate/profiles/0.5/process_run_crate/
+
+    Args:
+        crate: The ROCrate object.
+    Returns:
+        The CreativeWork entity representing the Process Run Crate profile.
+    """
+    prc = CreativeWork(
+        crate=crate,
+        identifier="https://w3id.org/ro/wfrun/process/0.5",
+        properties={
+            "name": "Process Run Crate",
+            "version": "0.5",
+        },
+    )
+
+    if not crate.get(prc.id):
+        crate.add(prc)
+
+    if (
+        "conformsTo" not in crate.root_dataset
+        or crate.root_dataset["conformsTo"] != prc
+    ):
+        crate.root_dataset["conformsTo"] = prc
+    if (
+        "https://w3id.org/ro/terms/workflow-run/context"
+        not in crate.metadata.extra_contexts
+    ):
+        crate.metadata.extra_contexts.append(
+            "https://w3id.org/ro/terms/workflow-run/context"
+        )
+    return prc
+
+
 def _update_crate(
     crate: ROCrate,
     crate_root: Path,
@@ -573,6 +611,8 @@ def _update_crate(
     Returns:
         The updated ROCrate object.
     """
+    conform_to_process_run_crate_profile(crate)
+
     software = add_software_application(crate, program, software_version)
 
     all_inputs = add_files(crate, crate_root, ioargs.input_files) + add_dirs(
