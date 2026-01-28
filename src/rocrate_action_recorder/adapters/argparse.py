@@ -1,6 +1,6 @@
 """Adapter for argparse CLI framework."""
 
-from argparse import ArgumentParser, Namespace
+from argparse import _VersionAction, ArgumentParser, Namespace
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -85,15 +85,22 @@ def argparse_value2paths(v: Any) -> list[Path]:
 
 
 def version_from_parser(parser: ArgumentParser) -> str | None:
-    """Attempt to extract version information from an ArgumentParser.
+    """Attempt to extract version information from an ArgumentParser version action.
 
     Args:
         parser: The ArgumentParser instance.
     Returns:
         The version string if found, otherwise None.
+
+    Example:
+        >>> import argparse
+        >>> parser = argparse.ArgumentParser(prog="example-cli")
+        >>> parser.add_argument('--version', action='version', version='1.2.3')
+        >>> version_from_parser(parser)
+        '1.2.3'
     """
     for action in parser._actions:
-        if getattr(action, "version", None):
+        if isinstance(action, _VersionAction) and action.version is not None:
             return (
                 action.version.replace("%(prog)s", "").replace(parser.prog, "").strip()
             )
@@ -211,6 +218,8 @@ def record_with_argparse(
         Path('ro-crate-metadata.json')
     """
     info = argparse_info(ns, parser)
+    if software_version is None:
+        software_version = version_from_parser(parser)
     return record(
         info=info,
         ios=ios,
