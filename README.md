@@ -23,79 +23,108 @@ from pathlib import Path
 from rocrate_action_recorder import record_with_argparse, IOs
 
 parser = argparse.ArgumentParser(prog="example-cli", description="Example CLI")
-parser.add_argument("--input", type=Path, required=True, help="Input file")
-parser.add_argument("--output", type=Path, required=True, help="Output file")
+parser.add_argument("--version", action="version", version="1.2.3")
+parser.add_argument("input", type=Path, help="Input file")
+parser.add_argument("output", type=Path, help="Output file")
 
-args = ['--input', 'input.txt', '--output', 'output.txt']
+args = ['input.txt', 'output.txt']
 ns = parser.parse_args(args)
+# Tell recorder about input and output files
 ios = IOs(input_files=["input"], output_files=["output"])
 start_time = datetime.now()
 
 # Do handling of the CLI command here...
 
-# named args are for portability, in real usage you can omit them
-record_with_argparse(parser, ns, ios, start_time, software_version="1.2.3", argv=['example-cli'] + args)
+# argv argument is optional, in real usage you can omit it
+record_with_argparse(parser, ns, ios, start_time, argv=['example-cli'] + args)
 ```
 
 <details>
 <summary>
-Will generate a `ro-crate-metadata.json` file in the current working directory describing the execution of the CLI command.
+Will generate a `ro-crate-metadata.json` file in the current working directory describing the execution of the CLI command. (Click me to see crate content)
 </summary>
 
 ```json
 {
-        "@context": "https://w3id.org/ro/crate/1.1/context",
-        "@graph": [
-            {
-                "@id": "./",
-                "@type": "Dataset",
-                "datePublished": "2026-01-16T12:00:05+00:00",
-                "hasPart": [{"@id": "input.txt"}, {"@id": "output.txt"}],
-                "license": "CC-BY-4.0",
+{
+    "@context": "https://w3id.org/ro/crate/1.1/context",
+    "@graph": [
+        {
+            "@id": "./",
+            "@type": "Dataset",
+            "datePublished": "2026-01-28T11:21:20.238826",
+            "hasPart": [
+                {
+                    "@id": "data/input.txt"
+                },
+                {
+                    "@id": "output.txt"
+                }
+            ]
+        },
+        {
+            "@id": "ro-crate-metadata.json",
+            "@type": "CreativeWork",
+            "about": {
+                "@id": "./"
             },
-            {
-                "@id": "ro-crate-metadata.json",
-                "@type": "CreativeWork",
-                "about": {"@id": "./"},
-                "conformsTo": {"@id": "https://w3id.org/ro/crate/1.1"},
+            "conformsTo": {
+                "@id": "https://w3id.org/ro/crate/1.1"
+            }
+        },
+        {
+            "@id": "myscript@1.0.0",
+            "@type": "SoftwareApplication",
+            "description": "Example CLI",
+            "name": "myscript",
+            "version": "1.0.0"
+        },
+        {
+            "@id": "data/input.txt",
+            "@type": "File",
+            "contentSize": 446,
+            "description": "Input file",
+            "encodingFormat": "text/plain",
+            "name": "data/input.txt"
+        },
+        {
+            "@id": "output.txt",
+            "@type": "File",
+            "contentSize": 446,
+            "description": "Output file",
+            "encodingFormat": "text/plain",
+            "name": "output.txt"
+        },
+        {
+            "@id": "sverhoeven",
+            "@type": "Person",
+            "name": "sverhoeven"
+        },
+        {
+            "@id": "./myscript.py data/input.txt output.txt",
+            "@type": "CreateAction",
+            "agent": {
+                "@id": "sverhoeven"
             },
-            {
-                "@id": "example-cli@1.2.3",
-                "@type": "SoftwareApplication",
-                "description": "Example CLI",
-                "name": "example-cli",
-                "version": "1.2.3",
+            "endTime": "2026-01-28T11:21:20.238826",
+            "instrument": {
+                "@id": "myscript@1.0.0"
             },
-            {
-                "@id": "input.txt",
-                "@type": "File",
-                "contentSize": 12,
-                "description": "Input file",
-                "encodingFormat": "text/plain",
-                "name": "input.txt",
-            },
-            {
-                "@id": "output.txt",
-                "@type": "File",
-                "contentSize": 12,
-                "description": "Output file",
-                "encodingFormat": "text/plain",
-                "name": "output.txt",
-            },
-            {"@id": "test_user", "@type": "Person", "name": "test_user"},
-            {
-                "@id": "example-cli --input input.txt --output output.txt",
-                "@type": "CreateAction",
-                "agent": {"@id": "test_user"},
-                "endTime": "2026-01-16T12:00:05+00:00",
-                "instrument": {"@id": "example-cli@1.2.3"},
-                "name": "example-cli --input input.txt --output output.txt",
-                "object": [{"@id": "input.txt"}],
-                "result": [{"@id": "output.txt"}],
-                "startTime": "2026-01-16T12:00:00+00:00",
-            },
-        ],
-    }
+            "name": "./myscript.py data/input.txt output.txt",
+            "object": [
+                {
+                    "@id": "data/input.txt"
+                }
+            ],
+            "result": [
+                {
+                    "@id": "output.txt"
+                }
+            ],
+            "startTime": "2026-01-28T11:21:20.238456"
+        }
+    ]
+}
 ```
 
 </details>
