@@ -24,7 +24,6 @@ class Program:
     name: str
     description: str
     subcommands: dict[str, "Program"] = field(default_factory=dict)
-    version: str | None = None
 
 
 @dataclass
