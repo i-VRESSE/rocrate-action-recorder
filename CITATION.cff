@@ -1,0 +1,15 @@
+# YAML 1.2
+---
+cff-version: 1.2.0
+title: rocrate-action-recorder
+message: >-
+  If you use this software, please cite it using the
+  metadata from this file.
+type: software
+authors:
+  - affiliation: "Netherlands eScience Center"
+    family-names: Verhoeven
+    given-names: Stefan
+    orcid: "https://orcid.org/0000-0002-5821-2060"
+repository-code: https://github.com/i-VRESSE/rocrate-action-recorder
+
