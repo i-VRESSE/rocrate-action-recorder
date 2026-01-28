@@ -7,8 +7,9 @@ from rocrate_action_recorder import record_with_argparse, IOs
 
 def make_parser():
     parser = argparse.ArgumentParser(prog="myscript", description="Example CLI")
-    parser.add_argument("--input", type=Path, help="Input file")
-    parser.add_argument("--output", type=Path, help="Output file")
+    parser.add_argument("--version", action="version", version="%(prog)s 1.0.0")
+    parser.add_argument("input", type=Path, help="Input file")
+    parser.add_argument("output", type=Path, help="Output file")
     return parser
 
 
@@ -23,6 +24,7 @@ def handler(args, parser):
         ns=args,
         ios=ios,
         start_time=start_time,
+        dataset_license="CC-BY-4.0",
     )
 
 

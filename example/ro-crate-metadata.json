@@ -1,77 +1,94 @@
 {
-    "@context": "https://w3id.org/ro/crate/1.1/context",
+    "@context": [
+        "https://w3id.org/ro/crate/1.1/context",
+        "https://w3id.org/ro/terms/workflow-run/context"
+    ],
     "@graph": [
         {
-            "@type": "CreativeWork",
-            "@id": "ro-crate-metadata.json",
-            "conformsTo": {
-                "@id": "https://w3id.org/ro/crate/1.1"
-            },
-            "about": {
-                "@id": "./"
-            }
-        },
-        {
             "@id": "./",
-            "@type": [
-                "Dataset"
-            ],
-            "name": "myscript.py actions",
-            "description": "Calls to mypscript.py recorded as RO-Crate metadata.",
-            "license": "CC-BY-4.0",
-            "datePublished": "2026-01-16",
+            "@type": "Dataset",
+            "conformsTo": {
+                "@id": "https://w3id.org/ro/wfrun/process/0.5"
+            },
+            "datePublished": "2026-01-28T15:09:24.317185",
+            "description": "An RO-Crate recording the files and directories that were used as input or output by myscript.",
             "hasPart": [
                 {
                     "@id": "data/input.txt"
                 },
                 {
-                    "@id": "results/output.txt"
+                    "@id": "output.txt"
                 }
-            ]
+            ],
+            "license": "CC-BY-4.0",
+            "name": "Files used by myscript"
+        },
+        {
+            "@id": "ro-crate-metadata.json",
+            "@type": "CreativeWork",
+            "about": {
+                "@id": "./"
+            },
+            "conformsTo": {
+                "@id": "https://w3id.org/ro/crate/1.1"
+            }
+        },
+        {
+            "@id": "https://w3id.org/ro/wfrun/process/0.5",
+            "@type": "CreativeWork",
+            "name": "Process Run Crate",
+            "version": "0.5"
+        },
+        {
+            "@id": "myscript@1.0.0",
+            "@type": "SoftwareApplication",
+            "description": "Example CLI",
+            "name": "myscript",
+            "version": "1.0.0"
         },
         {
             "@id": "data/input.txt",
             "@type": "File",
-            "name": "Input file",
-            "contentSize": "766",
-            "encodingFormat": "text/plain"
+            "contentSize": 446,
+            "description": "Input file",
+            "encodingFormat": "text/plain",
+            "name": "data/input.txt"
         },
         {
-            "@id": "results/output.txt",
+            "@id": "output.txt",
             "@type": "File",
-            "name": "Output file",
-            "contentSize": "766",
-            "encodingFormat": "text/plain"
+            "contentSize": 446,
+            "description": "Output file",
+            "encodingFormat": "text/plain",
+            "name": "output.txt"
         },
         {
-            "@id": "stefan",
+            "@id": "stefanv",
             "@type": "Person",
-            "name": "stefan"
+            "name": "stefanv"
         },
         {
-            "@id": "myscript.py",
-            "@type": "SoftwareApplication",
-            "name": "myscript",
-            "version": "1.0.0" 
-        },
-        {
-            "@id": "myscript.py --input data/input.txt --output results/output.txt",
+            "@id": "./myscript.py data/input.txt output.txt",
             "@type": "CreateAction",
-            "name": "Example CLI",
             "agent": {
-                "@id": "stefan"
+                "@id": "stefanv"
             },
+            "endTime": "2026-01-28T15:09:24.317185",
             "instrument": {
-                "@id": "myscript.py"
+                "@id": "myscript@1.0.0"
             },
-            "startTime": "2026-01-16T12:00:00Z",
-            "endTime": "2026-01-16T12:30:00Z",
-            "object": {
-                "@id": "data/input.txt"
-            },
-            "result": {
-                "@id": "results/output.txt"
-            }
+            "name": "./myscript.py data/input.txt output.txt",
+            "object": [
+                {
+                    "@id": "data/input.txt"
+                }
+            ],
+            "result": [
+                {
+                    "@id": "output.txt"
+                }
+            ],
+            "startTime": "2026-01-28T15:09:24.316822"
         }
     ]
 }

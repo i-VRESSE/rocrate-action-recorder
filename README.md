@@ -7,6 +7,7 @@
 Python package to record calls of Python CLI commands into a [Research Object Crate (RO-Crate)](https://www.researchobject.org/ro-crate/).
 
 Supports [RO-Crate 1.1](https://www.researchobject.org/ro-crate/specification/1.1/index.html) specification.
+Specifically the [Process Run Crate profile](https://www.researchobject.org/workflow-run-crate/profiles/0.5/process_run_crate/).
 
 ## Install
 
@@ -23,79 +24,132 @@ from pathlib import Path
 from rocrate_action_recorder import record_with_argparse, IOs
 
 parser = argparse.ArgumentParser(prog="example-cli", description="Example CLI")
-parser.add_argument("--input", type=Path, required=True, help="Input file")
-parser.add_argument("--output", type=Path, required=True, help="Output file")
+parser.add_argument("--version", action="version", version="1.2.3")
+parser.add_argument("input", type=Path, help="Input file")
+parser.add_argument("output", type=Path, help="Output file")
 
-args = ['--input', 'input.txt', '--output', 'output.txt']
+Path("input.txt").write_text("hello")
+args = ['input.txt', 'output.txt']
 ns = parser.parse_args(args)
+# Tell recorder about input and output files
 ios = IOs(input_files=["input"], output_files=["output"])
 start_time = datetime.now()
 
 # Do handling of the CLI command here...
+# For demonstration, just upper case input to output
+Path(ns.output).write_text(ns.input.read_text().upper())
 
-# named args are for portability, in real usage you can omit them
-record_with_argparse(parser, ns, ios, start_time, software_version="1.2.3", argv=['example-cli'] + args)
+record_with_argparse(
+    parser, ns, ios, 
+    start_time, 
+    dataset_license="CC-BY-4.0",
+    # argv argument is optional, in real usage you can omit it
+    argv=['example-cli'] + args,
+    # current_user argument is optional, in real usage you can omit it
+    current_user="someuser"
+)
 ```
 
 <details>
 <summary>
-Will generate a `ro-crate-metadata.json` file in the current working directory describing the execution of the CLI command.
+Will generate a `ro-crate-metadata.json` file in the current working directory describing the execution of the CLI command. (Click me to see crate content)
 </summary>
 
 ```json
 {
-        "@context": "https://w3id.org/ro/crate/1.1/context",
-        "@graph": [
-            {
-                "@id": "./",
-                "@type": "Dataset",
-                "datePublished": "2026-01-16T12:00:05+00:00",
-                "hasPart": [{"@id": "input.txt"}, {"@id": "output.txt"}],
-                "license": "CC-BY-4.0",
+    "@context": [
+        "https://w3id.org/ro/crate/1.1/context",
+        "https://w3id.org/ro/terms/workflow-run/context"
+    ],
+    "@graph": [
+        {
+            "@id": "./",
+            "@type": "Dataset",
+            "conformsTo": {
+                "@id": "https://w3id.org/ro/wfrun/process/0.5"
             },
-            {
-                "@id": "ro-crate-metadata.json",
-                "@type": "CreativeWork",
-                "about": {"@id": "./"},
-                "conformsTo": {"@id": "https://w3id.org/ro/crate/1.1"},
+            "datePublished": "2026-01-28T15:07:18.600135",
+            "description": "An RO-Crate recording the files and directories that were used as input or output by example-cli.",
+            "hasPart": [
+                {
+                    "@id": "input.txt"
+                },
+                {
+                    "@id": "output.txt"
+                }
+            ],
+            "license": "CC-BY-4.0",
+            "name": "Files used by example-cli"
+        },
+        {
+            "@id": "ro-crate-metadata.json",
+            "@type": "CreativeWork",
+            "about": {
+                "@id": "./"
             },
-            {
-                "@id": "example-cli@1.2.3",
-                "@type": "SoftwareApplication",
-                "description": "Example CLI",
-                "name": "example-cli",
-                "version": "1.2.3",
+            "conformsTo": {
+                "@id": "https://w3id.org/ro/crate/1.1"
+            }
+        },
+        {
+            "@id": "https://w3id.org/ro/wfrun/process/0.5",
+            "@type": "CreativeWork",
+            "name": "Process Run Crate",
+            "version": "0.5"
+        },
+        {
+            "@id": "example-cli@1.2.3",
+            "@type": "SoftwareApplication",
+            "description": "Example CLI",
+            "name": "example-cli",
+            "version": "1.2.3"
+        },
+        {
+            "@id": "input.txt",
+            "@type": "File",
+            "contentSize": 5,
+            "description": "Input file",
+            "encodingFormat": "text/plain",
+            "name": "input.txt"
+        },
+        {
+            "@id": "output.txt",
+            "@type": "File",
+            "contentSize": 5,
+            "description": "Output file",
+            "encodingFormat": "text/plain",
+            "name": "output.txt"
+        },
+        {
+            "@id": "someuser",
+            "@type": "Person",
+            "name": "someuser"
+        },
+        {
+            "@id": "example-cli input.txt output.txt",
+            "@type": "CreateAction",
+            "agent": {
+                "@id": "someuser"
             },
-            {
-                "@id": "input.txt",
-                "@type": "File",
-                "contentSize": 12,
-                "description": "Input file",
-                "encodingFormat": "text/plain",
-                "name": "input.txt",
+            "endTime": "2026-01-28T15:07:18.600135",
+            "instrument": {
+                "@id": "example-cli@1.2.3"
             },
-            {
-                "@id": "output.txt",
-                "@type": "File",
-                "contentSize": 12,
-                "description": "Output file",
-                "encodingFormat": "text/plain",
-                "name": "output.txt",
-            },
-            {"@id": "test_user", "@type": "Person", "name": "test_user"},
-            {
-                "@id": "example-cli --input input.txt --output output.txt",
-                "@type": "CreateAction",
-                "agent": {"@id": "test_user"},
-                "endTime": "2026-01-16T12:00:05+00:00",
-                "instrument": {"@id": "example-cli@1.2.3"},
-                "name": "example-cli --input input.txt --output output.txt",
-                "object": [{"@id": "input.txt"}],
-                "result": [{"@id": "output.txt"}],
-                "startTime": "2026-01-16T12:00:00+00:00",
-            },
-        ],
-    }
+            "name": "example-cli input.txt output.txt",
+            "object": [
+                {
+                    "@id": "input.txt"
+                }
+            ],
+            "result": [
+                {
+                    "@id": "output.txt"
+                }
+            ],
+            "startTime": "2026-01-28T15:07:18.599714"
+        }
+    ]
+}
 ```
 
 </details>

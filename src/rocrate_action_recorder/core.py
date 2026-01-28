@@ -12,11 +12,15 @@ import shutil
 import subprocess
 import sys
 from shlex import quote
+import logging
 
 from rocrate.model import File
 from rocrate.model.dataset import Dataset
 from rocrate.model.person import Person
+from rocrate.model.creativework import CreativeWork
 from rocrate.rocrate import Entity, ROCrate, SoftwareApplication, Metadata
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -186,6 +190,7 @@ def record(
         software_version: Optional version string of the software. If None, attempts to
             detect it automatically.
         dataset_license: Optional license string to set for the RO-Crate dataset.
+            For example "CC-BY-4.0".
 
     Returns:
         Path to the generated ro-crate-metadata.json file.
@@ -218,6 +223,11 @@ def record(
         input_dirs=_collect_ioargs(ios.input_dirs, info.ioarguments),
         output_dirs=_collect_ioargs(ios.output_dirs, info.ioarguments),
     )
+
+    if not dataset_license:
+        logger.warning(
+            "No dataset license specified for the RO-Crate. This will lead to invalid crates. Consider setting a license like 'CC-BY-4.0'."
+        )
 
     return _record_run(
         crate_root=crate_root,
@@ -535,6 +545,43 @@ def _unique_by_id[T: Entity](entities: list[T]) -> list[T]:
     return unique_entities
 
 
+def conform_to_process_run_crate_profile(crate: ROCrate) -> CreativeWork:
+    """Makes crate conform to Process Run Crate profile
+
+    See https://www.researchobject.org/workflow-run-crate/profiles/0.5/process_run_crate/
+
+    Args:
+        crate: The ROCrate object.
+    Returns:
+        The CreativeWork entity representing the Process Run Crate profile.
+    """
+    prc = CreativeWork(
+        crate=crate,
+        identifier="https://w3id.org/ro/wfrun/process/0.5",
+        properties={
+            "name": "Process Run Crate",
+            "version": "0.5",
+        },
+    )
+
+    if not crate.get(prc.id):
+        crate.add(prc)
+
+    if (
+        "conformsTo" not in crate.root_dataset
+        or crate.root_dataset["conformsTo"] != prc
+    ):
+        crate.root_dataset["conformsTo"] = prc
+    if (
+        "https://w3id.org/ro/terms/workflow-run/context"
+        not in crate.metadata.extra_contexts
+    ):
+        crate.metadata.extra_contexts.append(
+            "https://w3id.org/ro/terms/workflow-run/context"
+        )
+    return prc
+
+
 def _update_crate(
     crate: ROCrate,
     crate_root: Path,
@@ -564,6 +611,8 @@ def _update_crate(
     Returns:
         The updated ROCrate object.
     """
+    conform_to_process_run_crate_profile(crate)
+
     software = add_software_application(crate, program, software_version)
 
     all_inputs = add_files(crate, crate_root, ioargs.input_files) + add_dirs(
@@ -589,6 +638,12 @@ def _update_crate(
     if dataset_license:
         crate.license = dataset_license
     crate.datePublished = end_time
+
+    if not crate.name:
+        crate.name = f"Files used by {program.name}"
+    if not crate.description:
+        crate.description = f"An RO-Crate recording the files and directories that were used as input or output by {program.name}."
+
     return crate
 
 

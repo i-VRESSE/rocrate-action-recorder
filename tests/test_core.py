@@ -1,11 +1,20 @@
+from datetime import datetime
 import importlib.metadata
 import json
 from pathlib import Path
 
+from pytest import LogCaptureFixture
 from rocrate_validator import services, models
 from rocrate_validator.utils.uri import URI
 
-from rocrate_action_recorder.core import detect_software_version, playback
+from rocrate_action_recorder.core import (
+    IOs,
+    Info,
+    Program,
+    detect_software_version,
+    playback,
+    record,
+)
 
 
 def assert_crate_shape(crate_dir: Path) -> None:
@@ -237,3 +246,88 @@ def test_playback_multiple_actions_sorted_by_endtime(tmp_path: Path):
     assert len(lines) == 2
     assert lines[0] == "converter --arg2"
     assert lines[1] == "analyzer --arg1"
+
+
+class Test_record:
+    def test_without_dataset_license(self, tmp_path: Path, caplog: LogCaptureFixture):
+        crate_root = tmp_path
+        start_time = datetime(2026, 1, 18, 14, 30, 0)
+        end_time = datetime(2026, 1, 28, 11, 42, 38, 0)
+
+        crate_meta = record(
+            info=Info(
+                program=Program(name="test_program", description="Test program"),
+                ioarguments={},
+            ),
+            ios=IOs(),
+            argv=["test_program"],
+            current_user="test_user",
+            start_time=start_time,
+            end_time=end_time,
+            crate_dir=crate_root,
+            software_version="1.0.0",
+        )
+
+        actual_entities = json.loads(crate_meta.read_text(encoding="utf-8"))
+        expected_entities = {
+            "@context": [
+                "https://w3id.org/ro/crate/1.1/context",
+                "https://w3id.org/ro/terms/workflow-run/context",
+            ],
+            "@graph": [
+                {
+                    "@id": "./",
+                    "@type": "Dataset",
+                    "datePublished": "2026-01-28T11:42:38",
+                    "conformsTo": {
+                        "@id": "https://w3id.org/ro/wfrun/process/0.5",
+                    },
+                    "name": "Files used by test_program",
+                    "description": "An RO-Crate recording the files and directories that were used as input or output by test_program.",
+                },
+                {
+                    "@id": "ro-crate-metadata.json",
+                    "@type": "CreativeWork",
+                    "about": {
+                        "@id": "./",
+                    },
+                    "conformsTo": {
+                        "@id": "https://w3id.org/ro/crate/1.1",
+                    },
+                },
+                {
+                    "@id": "https://w3id.org/ro/wfrun/process/0.5",
+                    "@type": "CreativeWork",
+                    "name": "Process Run Crate",
+                    "version": "0.5",
+                },
+                {
+                    "@id": "test_program@1.0.0",
+                    "@type": "SoftwareApplication",
+                    "description": "Test program",
+                    "name": "test_program",
+                    "version": "1.0.0",
+                },
+                {
+                    "@id": "test_user",
+                    "@type": "Person",
+                    "name": "test_user",
+                },
+                {
+                    "@id": "test_program",
+                    "@type": "CreateAction",
+                    "agent": {
+                        "@id": "test_user",
+                    },
+                    "endTime": "2026-01-28T11:42:38",
+                    "instrument": {
+                        "@id": "test_program@1.0.0",
+                    },
+                    "name": "test_program",
+                    "startTime": "2026-01-18T14:30:00",
+                },
+            ],
+        }
+        assert actual_entities == expected_entities
+
+        assert "No dataset license specified" in caplog.text
