@@ -1,5 +1,6 @@
 # rocrate-action-recorder
 
+<!-- SPHINX-START -->
 [![github repo badge](https://img.shields.io/badge/github-repo-000.svg?logo=github&labelColor=gray&color=blue)](https://github.com/i-VRESSE/rocrate-action-recorder)
 [![github license badge](https://img.shields.io/github/license/i-VRESSE/rocrate-action-recorder)](https://github.com/i-VRESSE/rocrate-action-recorder)
 [![CI](https://github.com/i-VRESSE/rocrate-action-recorder/actions/workflows/ci.yml/badge.svg)](https://github.com/i-VRESSE/rocrate-action-recorder/actions/workflows/ci.yml)
@@ -156,7 +157,7 @@ Will generate a `ro-crate-metadata.json` file in the current working directory d
 
 ## Example
 
-See the [example](example/) folder for a minimal example.
+See the [example](example/README.md) folder for a minimal example.
 
 ### Contributions
 
