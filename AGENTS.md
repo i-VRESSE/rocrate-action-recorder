@@ -15,6 +15,7 @@ uv build                 # Build package
 - use type hints everywhere
 - Google style docstrings, in docstring to not repeat type as they are in function signature.
 - test naming: `test_<function under test>_<given>`
+- group tests on same function under `class Test_<function under test>:` with method `def test_<given>(self):`
 
 ## Important
 
