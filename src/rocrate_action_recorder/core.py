@@ -25,38 +25,48 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class Program:
+    """
+    Attribute:
+        name: Name of the program.
+        description: Description of the program.
+        subcommands: Dictionary of subcommand names to Program instances.
+    """
+
     name: str
     description: str
     subcommands: dict[str, "Program"] = field(default_factory=dict)
 
 
 @dataclass
-class IOArgument:
+class IOArgumentPath:
+    """Container for the details of an input/output argument.
+
+    Attributes:
+        name: Name of the argument as in the parser.
+        path: The value of the argument as a path.
+        help: Help text associated with the argument.
+    """
+
     name: str
     path: Path
     help: str
 
 
 @dataclass
-class Info:
-    program: Program
-    ioarguments: dict[str, list[IOArgument]]
+class IOArgumentPaths:
+    """Container for all the input/output paths for a recording.
 
+    Attributes:
+        input_files: List of input file arguments.
+        output_files: List of output file arguments.
+        input_dirs: List of input directory arguments.
+        output_dirs: List of output directory arguments.
+    """
 
-@dataclass
-class IOs:
-    input_files: list[str] = field(default_factory=list[str])
-    output_files: list[str] = field(default_factory=list[str])
-    input_dirs: list[str] = field(default_factory=list[str])
-    output_dirs: list[str] = field(default_factory=list[str])
-
-
-@dataclass
-class IOArgs:
-    input_files: list[IOArgument]
-    output_files: list[IOArgument]
-    input_dirs: list[IOArgument]
-    output_dirs: list[IOArgument]
+    input_files: list[IOArgumentPath]
+    output_files: list[IOArgumentPath]
+    input_dirs: list[IOArgumentPath]
+    output_dirs: list[IOArgumentPath]
 
 
 @dataclass
@@ -126,9 +136,9 @@ def _dectect_version_by_running(program_name: str) -> str:
     return ""
 
 
-def _collect_ioargs(
-    argument_names: list[str], ioarguments: dict[str, list[IOArgument]]
-) -> list[IOArgument]:
+def map_argument_names2paths(
+    argument_names: list[str], ioarguments: dict[str, list[IOArgumentPath]]
+) -> list[IOArgumentPath]:
     """Collect IOArguments for the given argument names.
 
     Args:
@@ -161,8 +171,8 @@ def make_action_id(argv: list[str] | None = None) -> str:
 
 
 def record(
-    info: Info,
-    ios: IOs,
+    program: Program,
+    ioargs: IOArgumentPaths,
     start_time: datetime,
     crate_dir: Path | None = None,
     argv: list[str] | None = None,
@@ -178,8 +188,8 @@ def record(
     For example use `record_with_argparse` for [argparse](https://docs.python.org/3/library/argparse.html).
 
     Args:
-        info: The Info object with program details and IO arguments.
-        ios: The IOs specifying which arguments are inputs and outputs.
+        program: The program details.
+        ioargs: Which files/directories are involved in action.
         start_time: The datetime when the action started.
         crate_dir: Optional path to the RO-Crate directory. If None, uses current working
             directory.
@@ -215,14 +225,7 @@ def record(
     if end_time is None:
         end_time = datetime.now()
 
-    software_version = software_version or detect_software_version(info.program.name)
-
-    ioargs = IOArgs(
-        input_files=_collect_ioargs(ios.input_files, info.ioarguments),
-        output_files=_collect_ioargs(ios.output_files, info.ioarguments),
-        input_dirs=_collect_ioargs(ios.input_dirs, info.ioarguments),
-        output_dirs=_collect_ioargs(ios.output_dirs, info.ioarguments),
-    )
+    software_version = software_version or detect_software_version(program.name)
 
     if not dataset_license:
         logger.warning(
@@ -231,7 +234,7 @@ def record(
 
     return _record_run(
         crate_root=crate_root,
-        program=info.program,
+        program=program,
         software_version=software_version,
         ioargs=ioargs,
         action_id=action_id,
@@ -339,7 +342,7 @@ def get_relative_path(path: Path, root: Path) -> Path:
     return rpath
 
 
-def add_file(crate: ROCrate, crate_root: Path, ioarg: IOArgument) -> File:
+def add_file(crate: ROCrate, crate_root: Path, ioarg: IOArgumentPath) -> File:
     """Add or update a File in the crate.
 
     Args:
@@ -382,7 +385,9 @@ def add_file(crate: ROCrate, crate_root: Path, ioarg: IOArgument) -> File:
     return file
 
 
-def add_files(crate: ROCrate, crate_root: Path, ioargs: list[IOArgument]) -> list[File]:
+def add_files(
+    crate: ROCrate, crate_root: Path, ioargs: list[IOArgumentPath]
+) -> list[File]:
     """Add multiple files to the crate.
 
     Args:
@@ -396,7 +401,7 @@ def add_files(crate: ROCrate, crate_root: Path, ioargs: list[IOArgument]) -> lis
     return [add_file(crate, crate_root, ioarg) for ioarg in ioargs]
 
 
-def add_dir(crate: ROCrate, crate_root: Path, ioarg: IOArgument) -> Dataset:
+def add_dir(crate: ROCrate, crate_root: Path, ioarg: IOArgumentPath) -> Dataset:
     """Add or get a Dataset (directory) in the crate.
 
     Args:
@@ -423,7 +428,7 @@ def add_dir(crate: ROCrate, crate_root: Path, ioarg: IOArgument) -> Dataset:
 
 
 def add_dirs(
-    crate: ROCrate, crate_root: Path, ioargs: list[IOArgument]
+    crate: ROCrate, crate_root: Path, ioargs: list[IOArgumentPath]
 ) -> list[Dataset]:
     """Add multiple directories to the crate.
 
@@ -483,7 +488,7 @@ def _record_run(
     crate_root: Path,
     program: Program,
     software_version: str,
-    ioargs: IOArgs,
+    ioargs: IOArgumentPaths,
     action_id: str,
     start_time: datetime,
     end_time: datetime,
@@ -587,7 +592,7 @@ def _update_crate(
     crate_root: Path,
     program: Program,
     software_version: str,
-    ioargs: IOArgs,
+    ioargs: IOArgumentPaths,
     action_id: str,
     start_time: datetime,
     end_time: datetime,

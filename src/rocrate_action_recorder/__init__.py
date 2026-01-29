@@ -2,9 +2,7 @@
 
 from rocrate_action_recorder.adapters.argparse import record_with_argparse
 from rocrate_action_recorder.core import (
-    IOArgument,
-    IOs,
-    Info,
+    IOArgumentPath,
     Program,
     record,
     playback,
@@ -15,7 +13,5 @@ __all__ = [
     "record",
     "playback",
     "Program",
-    "IOArgument",
-    "Info",
-    "IOs",
+    "IOArgumentPath",
 ]

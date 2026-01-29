@@ -1,15 +1,16 @@
 """Adapter for argparse CLI framework."""
 
 from argparse import _VersionAction, ArgumentParser, Namespace
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from rocrate_action_recorder.core import (
-    IOArgument,
-    Info,
-    IOs,
+    IOArgumentPaths,
+    IOArgumentPath,
     Program,
+    map_argument_names2paths,
     record,
 )
 
@@ -107,6 +108,27 @@ def version_from_parser(parser: ArgumentParser) -> str | None:
     return None
 
 
+def argparse2program(parser: ArgumentParser) -> Program:
+    """Convert an ArgumentParser to a Program object.
+
+    Args:
+        parser: The ArgumentParser instance.
+
+    Returns:
+        A Program object with name and description.
+    """
+    return Program(
+        name=parser.prog,
+        description=parser.description or "",
+    )
+
+
+@dataclass
+class Info:
+    program: Program
+    ioarguments: dict[str, list[IOArgumentPath]]
+
+
 def argparse_info(args: Namespace, parser: ArgumentParser) -> Info:
     """Extract program and IO information from argparse results.
 
@@ -120,7 +142,7 @@ def argparse_info(args: Namespace, parser: ArgumentParser) -> Info:
     Raises:
         ValueError: If parser has subparsers but dest is not set.
     """
-    ioarguments: dict[str, list[IOArgument]] = {}
+    ioarguments: dict[str, list[IOArgumentPath]] = {}
     for k, v in args._get_kwargs():
         paths = argparse_value2paths(v)
         if not paths:  # Skip empty lists
@@ -129,7 +151,9 @@ def argparse_info(args: Namespace, parser: ArgumentParser) -> Info:
         if k in ioarguments:
             continue
         help = argparse_help(parser, k) or ""
-        ioarguments[k] = [IOArgument(name=k, path=path, help=help) for path in paths]
+        ioarguments[k] = [
+            IOArgumentPath(name=k, path=path, help=help) for path in paths
+        ]
 
     program = Program(
         name=parser.prog,
@@ -162,10 +186,27 @@ def argparse_info(args: Namespace, parser: ArgumentParser) -> Info:
     )
 
 
+@dataclass
+class IOArgumentNames:
+    """Which argument names have values that are input/output files or directories.
+
+    Attributes:
+        input_files: List of argument names for input files.
+        output_files: List of argument names for output files.
+        input_dirs: List of argument names for input directories.
+        output_dirs: List of argument names for output directories.
+    """
+
+    input_files: list[str] = field(default_factory=list[str])
+    output_files: list[str] = field(default_factory=list[str])
+    input_dirs: list[str] = field(default_factory=list[str])
+    output_dirs: list[str] = field(default_factory=list[str])
+
+
 def record_with_argparse(
     parser: ArgumentParser,
     ns: Namespace,
-    ios: IOs,
+    ios: IOArgumentNames,
     start_time: datetime,
     crate_dir: Path | None = None,
     argv: list[str] | None = None,
@@ -179,7 +220,7 @@ def record_with_argparse(
     Args:
         parser: The argparse.ArgumentParser used to parse the arguments.
         ns: The argparse.Namespace with parsed arguments.
-        ios: The IOs specifying which arguments are inputs and outputs.
+        ios: The argument names that are inputs/outputs files/directories.
         start_time: The datetime when the action started.
         crate_dir: Optional path to the RO-Crate directory. If None, uses current working
             directory.
@@ -220,9 +261,17 @@ def record_with_argparse(
     info = argparse_info(ns, parser)
     if software_version is None:
         software_version = version_from_parser(parser)
+
+    ioargs = IOArgumentPaths(
+        input_files=map_argument_names2paths(ios.input_files, info.ioarguments),
+        output_files=map_argument_names2paths(ios.output_files, info.ioarguments),
+        input_dirs=map_argument_names2paths(ios.input_dirs, info.ioarguments),
+        output_dirs=map_argument_names2paths(ios.output_dirs, info.ioarguments),
+    )
+
     return record(
-        info=info,
-        ios=ios,
+        program=info.program,
+        ioargs=ioargs,
         start_time=start_time,
         crate_dir=crate_dir,
         argv=argv,
