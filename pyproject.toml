@@ -23,6 +23,7 @@ classifiers = [
 "Homepage" = "https://github.com/i-VRESSE/rocrate-action-recorder"
 "Repository" = "https://github.com/i-VRESSE/rocrate-action-recorder"
 "Issues" = "https://github.com/i-VRESSE/rocrate-action-recorder/issues"
+"Documentation" = "https://rocrate-action-recorder.readthedocs.io/"
 
 [build-system]
 requires = ["hatchling"]
