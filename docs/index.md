@@ -8,10 +8,9 @@
 
 ```{include} ../README.md
 :start-after: <!-- SPHINX-START -->
+:end-before: <!-- SPHINX-END -->
 ```
 
-## Indices and tables
+## Example
 
-- {ref}`genindex`
-- {ref}`modindex`
-- {ref}`search`
+See the [example](https://github.com/i-VRESSE/rocrate-action-recorder/tree/main/example) folder for a minimal example.

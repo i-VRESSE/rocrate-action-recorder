@@ -155,6 +155,8 @@ Will generate a `ro-crate-metadata.json` file in the current working directory d
 
 </details>
 
+<!-- SPHINX-END -->
+
 ## Example
 
 See the [example](example/README.md) folder for a minimal example.
