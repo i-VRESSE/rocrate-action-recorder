@@ -19,6 +19,10 @@ classifiers = [
   "Programming Language :: Python :: 3.14",
   "Topic :: Software Development :: Libraries",
 ]
+[project.urls]
+"Homepage" = "https://github.com/i-VRESSE/rocrate-action-recorder"
+"Repository" = "https://github.com/i-VRESSE/rocrate-action-recorder"
+"Issues" = "https://github.com/i-VRESSE/rocrate-action-recorder/issues"
 
 [build-system]
 requires = ["hatchling"]
@@ -39,6 +43,14 @@ test = [
     "pytest>=9.0.2",
     "pytest-cov>=7.0.0",
     "roc-validator>=0.8.0",
+]
+docs = [
+    "sphinx>=9.1.0",
+    "myst_parser>=0.13",
+    "sphinx-autoapi",
+    "sphinx_copybutton",
+    "sphinx_autodoc_typehints",
+    "furo>=2023.08.17",
 ]
 
 [tool.pytest]
