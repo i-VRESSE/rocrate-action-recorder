@@ -10,7 +10,7 @@
             "conformsTo": {
                 "@id": "https://w3id.org/ro/wfrun/process/0.5"
             },
-            "datePublished": "2026-01-28T15:09:24.317185",
+            "datePublished": "2026-01-29T07:54:24.132299",
             "description": "An RO-Crate recording the files and directories that were used as input or output by myscript.",
             "hasPart": [
                 {
@@ -63,17 +63,17 @@
             "name": "output.txt"
         },
         {
-            "@id": "stefanv",
+            "@id": "verhoes",
             "@type": "Person",
-            "name": "stefanv"
+            "name": "verhoes"
         },
         {
             "@id": "./myscript.py data/input.txt output.txt",
             "@type": "CreateAction",
             "agent": {
-                "@id": "stefanv"
+                "@id": "verhoes"
             },
-            "endTime": "2026-01-28T15:09:24.317185",
+            "endTime": "2026-01-29T07:54:24.132299",
             "instrument": {
                 "@id": "myscript@1.0.0"
             },
@@ -88,7 +88,7 @@
                     "@id": "output.txt"
                 }
             ],
-            "startTime": "2026-01-28T15:09:24.316822"
+            "startTime": "2026-01-29T07:54:24.131926"
         }
     ]
 }
