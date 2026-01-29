@@ -14,7 +14,7 @@ from importlib import import_module
 
 from typing import Any
 
-project = 'rocrate-action-recorder'
+project = "rocrate-action-recorder"
 version = release = importlib.metadata.version("rocrate-action-recorder")
 
 # -- General configuration ---------------------------------------------------
@@ -78,20 +78,21 @@ nitpick_ignore = [
 
 always_document_param_types = True
 
-autoapi_dirs = ['../src/rocrate_action_recorder']
+autoapi_dirs = ["../src/rocrate_action_recorder"]
 
 
+# TODO move to own package
 # Link to source on GitHub for objects documented by Sphinx's linkcode extension.
 # Implements the contract described at:
 # https://www.sphinx-doc.org/en/master/usage/extensions/linkcode.html
+# uses https://docs.readthedocs.com/platform/stable/reference/environment-variables.html
+# to make links point to the correct commit/branch.
 def linkcode_resolve(domain: str, info: dict) -> str | None:
     """Return a GitHub URL to the source for the given object.
 
     The function resolves Python objects (domain == "py") by importing the
     module and walking the attribute path. It then uses :mod:`inspect` to find
-    the source file and line numbers and constructs a URL of the form:
-
-    {repo}/blob/{branch}/{path}#L{start}-L{end}
+    the source file and line numbers and constructs a URL pointing to the file on GitHub.
     """
     if domain != "py":
         return None
@@ -116,9 +117,31 @@ def linkcode_resolve(domain: str, info: dict) -> str | None:
     except Exception:
         return None
 
-    # Hardcoded repository and branch for link targets
-    repo = "https://github.com/i-VRESSE/rocrate-action-recorder".rstrip("/")
-    branch = "main"
+    # Repository info for link targets
+    repo = "https://github.com/i-VRESSE/rocrate-action-recorder"
+
+    # Determine the Git reference to use for links. Prefer the exact commit hash
+    # if available (works for branches, tags and PR builds). Otherwise fall back
+    # to the identifier Read the Docs checked out (branch or tag name) or, for
+    # pull request builds without a commit, return a PR link.
+    git_identifier = os.environ.get("READTHEDOCS_GIT_IDENTIFIER")
+    git_commit = os.environ.get("READTHEDOCS_GIT_COMMIT_HASH")
+    version_type = os.environ.get("READTHEDOCS_VERSION_TYPE", "").lower()
+
+    # If we have a concrete commit, use that (stable and always resolvable).
+    if git_commit:
+        ref = git_commit
+        pr_number = None
+    else:
+        # No commit available: if this is a pull request build, READTHEDOCS_GIT_IDENTIFIER
+        # contains the PR number. In that case we can't point to a blob by ref, so
+        # return a link to the pull request page instead.
+        if git_identifier and version_type == "external":
+            pr_number = git_identifier
+            ref = None
+        else:
+            ref = git_identifier or "main"
+            pr_number = None
 
     filename = os.path.normpath(filename)
     parts = filename.split(os.path.sep)
@@ -137,4 +160,9 @@ def linkcode_resolve(domain: str, info: dict) -> str | None:
         return None
 
     end_line = start_line + len(source_lines) - 1
-    return f"{repo}/blob/{branch}/{relpath}#L{start_line}-L{end_line}"
+
+    # If this was a pull request build without a resolved commit, link to the PR page.
+    if pr_number is not None:
+        return f"{repo}/pull/{pr_number}"
+
+    return f"{repo}/blob/{ref}/{relpath}#L{start_line}-L{end_line}"
