@@ -70,12 +70,6 @@ intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
 }
 
-# TODO what is this?
-nitpick_ignore = [
-    ("py:class", "_io.StringIO"),
-    ("py:class", "_io.BytesIO"),
-]
-
 always_document_param_types = True
 
 autoapi_dirs = ["../src/rocrate_action_recorder"]

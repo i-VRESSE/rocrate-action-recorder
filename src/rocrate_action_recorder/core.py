@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 import getpass
 import importlib.metadata
+import inspect
 import mimetypes
 import os
 import pwd
@@ -25,49 +26,46 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class Program:
+    """Container for program details."""
+
     name: str
+    """ Name of the program. """
     description: str
+    """ Description of the program. """
     subcommands: dict[str, "Program"] = field(default_factory=dict)
-
-
-@dataclass
-class IOArgument:
-    name: str
-    path: Path
-    help: str
-
-
-@dataclass
-class Info:
-    program: Program
-    ioarguments: dict[str, list[IOArgument]]
-
-
-@dataclass
-class IOs:
-    input_files: list[str] = field(default_factory=list[str])
-    output_files: list[str] = field(default_factory=list[str])
-    input_dirs: list[str] = field(default_factory=list[str])
-    output_dirs: list[str] = field(default_factory=list[str])
-
-
-@dataclass
-class IOArgs:
-    input_files: list[IOArgument]
-    output_files: list[IOArgument]
-    input_dirs: list[IOArgument]
-    output_dirs: list[IOArgument]
-
-
-@dataclass
-class SoftwareInfo:
+    """Dictionary of subcommand names to Program instances. Only contains used by current action."""
     version: str | None = None
-    homepage: str | None = None
-    license: str | None = None
+    """ Version of the program. If None, will be detected automatically. """
+
+
+@dataclass
+class IOArgumentPath:
+    """Container for the details of an input/output argument."""
+
+    name: str
+    """ The name of the argument as known in the parser with `--` stripped. """
+    path: Path
+    """ The path value of the argument. """
+    help: str
+    """ Help text associated with the argument. """
+
+
+@dataclass
+class IOArgumentPaths:
+    """Container for all the input/output paths for a recording."""
+
+    input_files: list[IOArgumentPath] = field(default_factory=list[IOArgumentPath])
+    """List of input file argument paths."""
+    output_files: list[IOArgumentPath] = field(default_factory=list[IOArgumentPath])
+    """List of output file argument paths."""
+    input_dirs: list[IOArgumentPath] = field(default_factory=list[IOArgumentPath])
+    """List of input directory argument paths."""
+    output_dirs: list[IOArgumentPath] = field(default_factory=list[IOArgumentPath])
+    """List of output directory argument paths."""
 
 
 def detect_software_version(program_name: str) -> str:
-    """Detect software version from package name or executable.
+    """Detect software version from package name or executable or caller package.
 
     Args:
         program_name: Name of the program/package or path to executable.
@@ -85,9 +83,33 @@ def detect_software_version(program_name: str) -> str:
         software_version = _dectect_version_by_running(program_name)
 
     if not software_version:
-        # TODO try to determine package from caller frame?
-        pass
+        calling_package = _detect_package_from_stack()
+        if calling_package:
+            try:
+                software_version = importlib.metadata.version(calling_package)
+            except importlib.metadata.PackageNotFoundError:
+                software_version = ""
     return software_version
+
+
+def _detect_package_from_stack() -> str | None:
+    """Detect the distribution name from the current call stack.
+
+    Walks stack frames and returns the first distribution name that provides the
+    top-level package/module referenced in the frame. Returns None if not found.
+    """
+    pkg_map = importlib.metadata.packages_distributions()
+    for frame_info in inspect.stack()[1:]:
+        module = inspect.getmodule(frame_info.frame)
+        module_name = getattr(module, "__name__", None)
+        if not module_name:
+            continue
+        top_level = module_name.split(".")[0]
+        dists = pkg_map.get(top_level)
+        if dists:
+            # Return first distribution that provides the top-level package
+            return dists[0]
+    return None
 
 
 def _dectect_version_by_running(program_name: str) -> str:
@@ -126,25 +148,6 @@ def _dectect_version_by_running(program_name: str) -> str:
     return ""
 
 
-def _collect_ioargs(
-    argument_names: list[str], ioarguments: dict[str, list[IOArgument]]
-) -> list[IOArgument]:
-    """Collect IOArguments for the given argument names.
-
-    Args:
-        argument_names: List of argument names to match.
-        ioarguments: Dictionary mapping argument names to lists of IOArguments.
-
-    Returns:
-        List of IOArgument objects for the matching argument names.
-    """
-    args = []
-    for argument_name in argument_names:
-        if argument_name in ioarguments:
-            args.extend(ioarguments[argument_name])
-    return args
-
-
 def make_action_id(argv: list[str] | None = None) -> str:
     """Create an action ID from command-line arguments.
 
@@ -161,14 +164,13 @@ def make_action_id(argv: list[str] | None = None) -> str:
 
 
 def record(
-    info: Info,
-    ios: IOs,
+    program: Program,
+    ioargs: IOArgumentPaths,
     start_time: datetime,
     crate_dir: Path | None = None,
     argv: list[str] | None = None,
     end_time: datetime | None = None,
     current_user: str | None = None,
-    software_version: str | None = None,
     dataset_license: str | None = None,
 ) -> Path:
     """Record a CLI invocation in an RO-Crate.
@@ -178,8 +180,8 @@ def record(
     For example use `record_with_argparse` for [argparse](https://docs.python.org/3/library/argparse.html).
 
     Args:
-        info: The Info object with program details and IO arguments.
-        ios: The IOs specifying which arguments are inputs and outputs.
+        program: The program details.
+        ioargs: Which files/directories are involved in action.
         start_time: The datetime when the action started.
         crate_dir: Optional path to the RO-Crate directory. If None, uses current working
             directory.
@@ -187,8 +189,6 @@ def record(
         end_time: Optional datetime when the action ended. If None, uses current time.
         current_user: Optional username of the user running the action. If None, attempts
             to determine it from the system.
-        software_version: Optional version string of the software. If None, attempts to
-            detect it automatically.
         dataset_license: Optional license string to set for the RO-Crate dataset.
             For example "CC-BY-4.0".
 
@@ -215,14 +215,8 @@ def record(
     if end_time is None:
         end_time = datetime.now()
 
-    software_version = software_version or detect_software_version(info.program.name)
-
-    ioargs = IOArgs(
-        input_files=_collect_ioargs(ios.input_files, info.ioarguments),
-        output_files=_collect_ioargs(ios.output_files, info.ioarguments),
-        input_dirs=_collect_ioargs(ios.input_dirs, info.ioarguments),
-        output_dirs=_collect_ioargs(ios.output_dirs, info.ioarguments),
-    )
+    if not program.version:
+        program.version = detect_software_version(program.name)
 
     if not dataset_license:
         logger.warning(
@@ -231,8 +225,7 @@ def record(
 
     return _record_run(
         crate_root=crate_root,
-        program=info.program,
-        software_version=software_version,
+        program=program,
         ioargs=ioargs,
         action_id=action_id,
         start_time=start_time,
@@ -242,9 +235,7 @@ def record(
     )
 
 
-def build_software_application(
-    crate: ROCrate, program: Program, software_version: str
-) -> SoftwareApplication:
+def build_software_application(crate: ROCrate, program: Program) -> SoftwareApplication:
     """Build a SoftwareApplication object for the crate.
 
     Args:
@@ -255,6 +246,7 @@ def build_software_application(
     Returns:
         A SoftwareApplication object.
     """
+    software_version = program.version
     software_id = (
         f"{program.name}@{software_version}" if software_version else program.name
     )
@@ -267,9 +259,7 @@ def build_software_application(
     return software_app
 
 
-def add_software_application(
-    crate: ROCrate, program: Program, software_version: str
-) -> SoftwareApplication:
+def add_software_application(crate: ROCrate, program: Program) -> SoftwareApplication:
     """Add or get a SoftwareApplication in the crate.
 
     Args:
@@ -280,10 +270,10 @@ def add_software_application(
     Returns:
         The SoftwareApplication object.
     """
-    software_app = build_software_application(crate, program, software_version)
+    software_app = build_software_application(crate, program)
     sa = crate.get(software_app.id)
     props = sa.properties if sa and isinstance(sa.properties, dict) else {}
-    same_version = sa and props.get("version") == software_version
+    same_version = sa and props.get("version") == program.version
     if not same_version:
         crate.add(software_app)
     return software_app
@@ -335,11 +325,13 @@ def get_relative_path(path: Path, root: Path) -> Path:
     try:
         rpath = apath.relative_to(root)
     except ValueError as exc:
-        raise ValueError(f"Path '{path}' is outside the crate root '{root}'") from exc
+        raise ValueError(
+            f"Path '{path}' is outside the crate root '{root}'. Can not create crate with files outside the root."
+        ) from exc
     return rpath
 
 
-def add_file(crate: ROCrate, crate_root: Path, ioarg: IOArgument) -> File:
+def add_file(crate: ROCrate, crate_root: Path, ioarg: IOArgumentPath) -> File:
     """Add or update a File in the crate.
 
     Args:
@@ -382,7 +374,9 @@ def add_file(crate: ROCrate, crate_root: Path, ioarg: IOArgument) -> File:
     return file
 
 
-def add_files(crate: ROCrate, crate_root: Path, ioargs: list[IOArgument]) -> list[File]:
+def add_files(
+    crate: ROCrate, crate_root: Path, ioargs: list[IOArgumentPath]
+) -> list[File]:
     """Add multiple files to the crate.
 
     Args:
@@ -396,7 +390,7 @@ def add_files(crate: ROCrate, crate_root: Path, ioargs: list[IOArgument]) -> lis
     return [add_file(crate, crate_root, ioarg) for ioarg in ioargs]
 
 
-def add_dir(crate: ROCrate, crate_root: Path, ioarg: IOArgument) -> Dataset:
+def add_dir(crate: ROCrate, crate_root: Path, ioarg: IOArgumentPath) -> Dataset:
     """Add or get a Dataset (directory) in the crate.
 
     Args:
@@ -412,18 +406,21 @@ def add_dir(crate: ROCrate, crate_root: Path, ioarg: IOArgument) -> Dataset:
     existing_dir = crate.get(identifier)
     if existing_dir and isinstance(existing_dir, Dataset):
         return existing_dir
+    props = {"name": identifier}
+    if ioarg.help:
+        props["description"] = ioarg.help
     ds = Dataset(
         crate,
         source=identifier,
         dest_path=identifier,
-        properties={"name": identifier},
+        properties=props,
     )
     crate.add(ds)
     return ds
 
 
 def add_dirs(
-    crate: ROCrate, crate_root: Path, ioargs: list[IOArgument]
+    crate: ROCrate, crate_root: Path, ioargs: list[IOArgumentPath]
 ) -> list[Dataset]:
     """Add multiple directories to the crate.
 
@@ -482,8 +479,7 @@ def add_action(
 def _record_run(
     crate_root: Path,
     program: Program,
-    software_version: str,
-    ioargs: IOArgs,
+    ioargs: IOArgumentPaths,
     action_id: str,
     start_time: datetime,
     end_time: datetime,
@@ -495,7 +491,6 @@ def _record_run(
     Args:
         crate_root: Root directory of the crate.
         program: The Program object.
-        software_version: Version string.
         ioargs: IOArgs with input/output files and directories.
         action_id: Unique action identifier.
         start_time: When the action started.
@@ -514,7 +509,6 @@ def _record_run(
         crate=crate,
         crate_root=crate_root,
         program=program,
-        software_version=software_version,
         ioargs=ioargs,
         action_id=action_id,
         start_time=start_time,
@@ -586,8 +580,7 @@ def _update_crate(
     crate: ROCrate,
     crate_root: Path,
     program: Program,
-    software_version: str,
-    ioargs: IOArgs,
+    ioargs: IOArgumentPaths,
     action_id: str,
     start_time: datetime,
     end_time: datetime,
@@ -600,7 +593,6 @@ def _update_crate(
         crate: The ROCrate object.
         crate_root: Root directory.
         program: The Program object.
-        software_version: Version string.
         ioargs: IOArgs with inputs/outputs.
         action_id: Unique action identifier.
         start_time: When the action started.
@@ -613,7 +605,7 @@ def _update_crate(
     """
     conform_to_process_run_crate_profile(crate)
 
-    software = add_software_application(crate, program, software_version)
+    software = add_software_application(crate, program)
 
     all_inputs = add_files(crate, crate_root, ioargs.input_files) + add_dirs(
         crate, crate_root, ioargs.input_dirs

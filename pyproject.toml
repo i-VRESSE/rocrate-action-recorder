@@ -57,12 +57,13 @@ docs = [
 [tool.pytest]
 minversion = "9.0"
 strict = true
+addopts = ["--doctest-modules"]
 filterwarnings = [
   "error",
 ]
 log_level = "INFO"
 testpaths = [
-  "tests",
+  "tests", "src",
 ]
 
 [tool.coverage]

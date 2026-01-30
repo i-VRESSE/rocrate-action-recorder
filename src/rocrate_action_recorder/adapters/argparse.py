@@ -1,24 +1,37 @@
 """Adapter for argparse CLI framework."""
 
 from argparse import _VersionAction, ArgumentParser, Namespace
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+import logging
 
 from rocrate_action_recorder.core import (
-    IOArgument,
-    Info,
-    IOs,
+    IOArgumentPaths,
+    IOArgumentPath,
     Program,
     record,
 )
 
+logger = logging.getLogger(__name__)
 
-def argparse_help(parser: ArgumentParser, arg_name: str) -> str | None:
+
+class MissingDestArgparseSubparserError(ValueError):
+    """Raised when an argparse subparser is missing the 'dest' argument."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            "Argparse subparsers must have a 'dest' parameter defined to identify the chosen subcommand"
+        )
+
+
+def argparse_help(parser: ArgumentParser, ns: Namespace, arg_name: str) -> str | None:
     """Get help text for an argparse argument.
 
     Args:
         parser: The ArgumentParser instance.
+        ns: The parsed Namespace from argparse.
         arg_name: The argument destination name.
 
     Returns:
@@ -27,7 +40,40 @@ def argparse_help(parser: ArgumentParser, arg_name: str) -> str | None:
     for action in parser._actions:
         if action.dest == arg_name:
             return action.help
-    return None
+
+    # Find help in subparsers if applicable
+    if hasattr(parser, "_subparsers") and parser._subparsers:
+        for action in parser._subparsers._actions:
+            if hasattr(action, "choices") and isinstance(action.choices, dict):
+                dest = action.dest
+                if not dest or dest == "==SUPPRESS==":
+                    raise MissingDestArgparseSubparserError()
+                subcommand_name = getattr(ns, dest, None)
+                if subcommand_name and subcommand_name in action.choices:
+                    subparser = action.choices[subcommand_name]
+                    return argparse_help(subparser, ns, arg_name)
+
+
+def try_convert_to_path(item: Any) -> Path | None:
+    """Try to convert a single item to a Path."""
+    if isinstance(item, Path):
+        return item
+    elif hasattr(item, "name"):
+        if (
+            item.name is None
+            or item.name == "<stdin>"
+            or item.name == "<stdout>"
+            or item.name == "-"
+        ):
+            logger.warning(
+                "Unable to convert stdin/stdout file-like object to Path, ignoring it"
+            )
+            return None
+        return Path(item.name)
+    elif item is None:
+        logger.warning("Unable to convert None to Path, ignoring it")
+        return None
+    return Path(item)
 
 
 def argparse_value2paths(v: Any) -> list[Path]:
@@ -43,26 +89,8 @@ def argparse_value2paths(v: Any) -> list[Path]:
         A list of deduplicated Path objects. Empty list if value is not path-like.
     """
     paths: list[Path] = []
-
-    def try_convert_to_path(item: Any) -> Path | None:
-        """Try to convert a single item to a Path."""
-        if isinstance(item, Path):
-            return item
-        elif hasattr(item, "name"):
-            if (
-                item.name is None
-                or item.name == "<stdin>"
-                or item.name == "<stdout>"
-                or item.name == "-"
-            ):
-                return None
-            return Path(item.name)
-        elif isinstance(item, str):
-            return Path(item)
-        return None
-
-    # Handle lists and tuples
     if isinstance(v, (list, tuple)):
+        # Handle lists and tuples
         for item in v:
             path = try_convert_to_path(item)
             if path is not None:
@@ -93,79 +121,124 @@ def version_from_parser(parser: ArgumentParser) -> str | None:
         The version string if found, otherwise None.
 
     Example:
+
         >>> import argparse
+        >>> from rocrate_action_recorder.adapters.argparse import version_from_parser
+        >>>
         >>> parser = argparse.ArgumentParser(prog="example-cli")
-        >>> parser.add_argument('--version', action='version', version='1.2.3')
+        >>> _ = parser.add_argument('--version', action='version', version='1.2.3')
+        >>>
         >>> version_from_parser(parser)
         '1.2.3'
     """
     for action in parser._actions:
         if isinstance(action, _VersionAction) and action.version is not None:
-            return (
+            version = (
                 action.version.replace("%(prog)s", "").replace(parser.prog, "").strip()
             )
+            return version
     return None
 
 
-def argparse_info(args: Namespace, parser: ArgumentParser) -> Info:
-    """Extract program and IO information from argparse results.
+def program_from_parser(parser: ArgumentParser, ns: Namespace) -> Program:
+    """Extract Program information from argparse parser and namespace.
 
     Args:
-        args: The parsed Namespace from argparse.
         parser: The ArgumentParser instance.
-
+        ns: The parsed Namespace from argparse.
     Returns:
-        An Info object with program details and IO arguments.
-
-    Raises:
-        ValueError: If parser has subparsers but dest is not set.
+        A Program object with details about the CLI program.
     """
-    ioarguments: dict[str, list[IOArgument]] = {}
-    for k, v in args._get_kwargs():
-        paths = argparse_value2paths(v)
-        if not paths:  # Skip empty lists
-            continue
-        # Skip if key already exists
-        if k in ioarguments:
-            continue
-        help = argparse_help(parser, k) or ""
-        ioarguments[k] = [IOArgument(name=k, path=path, help=help) for path in paths]
-
     program = Program(
         name=parser.prog,
         description=parser.description or "",
+        version=version_from_parser(parser),
     )
-
-    # Handle subcommands if present
     if hasattr(parser, "_subparsers") and parser._subparsers:
         for action in parser._subparsers._actions:
             if hasattr(action, "choices") and isinstance(action.choices, dict):
                 dest = action.dest
                 if not dest or dest == "==SUPPRESS==":
-                    raise ValueError(
-                        "record_with_argparse requires add_subparsers(dest='name') "
-                        "with dest parameter set"
-                    )
-
-                subcommand_name = getattr(args, dest, None)
+                    raise MissingDestArgparseSubparserError()
+                subcommand_name = getattr(ns, dest, None)
                 if subcommand_name and subcommand_name in action.choices:
                     subparser = action.choices[subcommand_name]
-                    subinfo = argparse_info(args, subparser)
-                    program.subcommands[subcommand_name] = subinfo.program
-                    # Merge ioarguments from subcommand
-                    ioarguments.update(subinfo.ioarguments)
+                    subprogram = program_from_parser(subparser, ns)
+                    program.subcommands[subcommand_name] = subprogram
                 break
 
-    return Info(
-        program=program,
-        ioarguments=ioarguments,
+    return program
+
+
+@dataclass
+class IOArgumentNames:
+    """Which argument names have values that are input/output files or directories."""
+
+    input_files: list[str] = field(default_factory=list[str])
+    """List of argument names for input files."""
+    output_files: list[str] = field(default_factory=list[str])
+    """List of argument names for output files."""
+    input_dirs: list[str] = field(default_factory=list[str])
+    """List of argument names for input directories."""
+    output_dirs: list[str] = field(default_factory=list[str])
+    """List of argument names for output directories."""
+
+
+def map_name2paths(
+    parser: ArgumentParser, ns: Namespace, name: str
+) -> list[IOArgumentPath]:
+    value = getattr(ns, name)
+    help = argparse_help(parser, ns, name) or ""
+    paths = argparse_value2paths(value)
+    if not paths:
+        logger.warning(
+            f"Argument name '{name}' has no associated path-like argument value(s)."
+        )
+    return [IOArgumentPath(name=name, path=path, help=help) for path in paths]
+
+
+def map_names2paths(
+    parser: ArgumentParser, ns: Namespace, names: list[str]
+) -> list[IOArgumentPath]:
+    args: list[IOArgumentPath] = []
+    for name in names:
+        paths = map_name2paths(parser, ns, name)
+        args.extend(paths)
+    return args
+
+
+def collect_record_info_from_argparse(
+    parser: ArgumentParser,
+    ns: Namespace,
+    ios: IOArgumentNames,
+    software_version: str | None = None,
+) -> tuple[Program, IOArgumentPaths]:
+    """Collect Program and IOArgumentPaths from argparse so it can be recorded as an action in RO-Crate.
+
+    Args:
+        parser: The argparse.ArgumentParser used to parse the arguments.
+        ns: The argparse.Namespace with parsed arguments.
+        ios: The argument names that are inputs/outputs files/directories.
+        software_version: Optional version string to override detected version.
+    Returns:
+        A tuple of (Program, IOArgumentPaths).
+    """
+    program = program_from_parser(parser, ns)
+    if software_version is not None:
+        program.version = software_version
+    ioargs = IOArgumentPaths(
+        input_files=map_names2paths(parser, ns, ios.input_files),
+        output_files=map_names2paths(parser, ns, ios.output_files),
+        input_dirs=map_names2paths(parser, ns, ios.input_dirs),
+        output_dirs=map_names2paths(parser, ns, ios.output_dirs),
     )
+    return program, ioargs
 
 
 def record_with_argparse(
     parser: ArgumentParser,
     ns: Namespace,
-    ios: IOs,
+    ios: IOArgumentNames,
     start_time: datetime,
     crate_dir: Path | None = None,
     argv: list[str] | None = None,
@@ -179,7 +252,7 @@ def record_with_argparse(
     Args:
         parser: The argparse.ArgumentParser used to parse the arguments.
         ns: The argparse.Namespace with parsed arguments.
-        ios: The IOs specifying which arguments are inputs and outputs.
+        ios: The argument names that are inputs/outputs files/directories.
         start_time: The datetime when the action started.
         crate_dir: Optional path to the RO-Crate directory. If None, uses current working
             directory.
@@ -199,35 +272,19 @@ def record_with_argparse(
             If the current user cannot be determined.
             If the specified paths are outside the crate root.
             If the software version cannot be determined based on the program name.
-
-    Example:
-        >>> import argparse
-        >>> from datetime import datetime
-        >>> from pathlib import Path
-        >>> from rocrate_action_recorder import record_with_argparse, IOs
-        >>>
-        >>> parser = argparse.ArgumentParser(prog="example-cli", description="Example CLI")
-        >>> parser.add_argument("--input", type=Path, required=True, help="Input file")
-        >>> parser.add_argument("--output", type=Path, required=True, help="Output file")
-        >>> args = ['--input', 'data/input.txt', '--output', 'data/output.txt']
-        >>> ns = parser.parse_args(args)
-        >>> ios = IOs(input_files=["input"], output_files=["output"])
-        >>> start_time = datetime.now()
-        >>> # named args are for portability, in real usage you can omit them
-        >>> record_with_argparse(parser, ns, ios, start_time, software_version="1.2.3", argv=['example-cli'] + args)
-        Path('ro-crate-metadata.json')
+        MissingDestArgparseSubparserError:
+            If parser has subparsers but dest is not set.
     """
-    info = argparse_info(ns, parser)
-    if software_version is None:
-        software_version = version_from_parser(parser)
+    program, ioargs = collect_record_info_from_argparse(
+        parser, ns, ios, software_version=software_version
+    )
     return record(
-        info=info,
-        ios=ios,
+        program=program,
+        ioargs=ioargs,
         start_time=start_time,
         crate_dir=crate_dir,
         argv=argv,
         end_time=end_time,
         current_user=current_user,
-        software_version=software_version,
         dataset_license=dataset_license,
     )
