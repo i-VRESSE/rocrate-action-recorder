@@ -19,30 +19,37 @@ pip install rocrate-action-recorder
 
 ## Usage
 
+Shown is an example of recording a CLI command (`example-cli input.txt output.txt`) implemented with `argparse`.
+
 ```python
 import argparse
 from datetime import datetime
 from pathlib import Path
-from rocrate_action_recorder import record_with_argparse, IOs
+from rocrate_action_recorder import record_with_argparse, IOArgumentNames
 
+# Create an argparse parser
 parser = argparse.ArgumentParser(prog="example-cli", description="Example CLI")
 parser.add_argument("--version", action="version", version="1.2.3")
 parser.add_argument("input", type=Path, help="Input file")
 parser.add_argument("output", type=Path, help="Output file")
 
+# Prepare input
 Path("input.txt").write_text("hello")
+
+# Parse arguments
 args = ['input.txt', 'output.txt']
 ns = parser.parse_args(args)
-# Tell recorder about input and output files
-ios = IOs(input_files=["input"], output_files=["output"])
-start_time = datetime.now()
 
-# Do handling of the CLI command here...
+# Do handling of the CLI command here
+start_time = datetime.now()
 # For demonstration, just upper case input to output
 Path(ns.output).write_text(ns.input.read_text().upper())
 
 record_with_argparse(
-    parser, ns, ios, 
+    parser, 
+    ns, 
+    # Tell recorder which arguments are for input and output files
+    IOArgumentNames(input_files=["input"], output_files=["output"]),
     start_time, 
     dataset_license="CC-BY-4.0",
     # argv argument is optional, in real usage you can omit it
@@ -152,6 +159,64 @@ Will generate a `ro-crate-metadata.json` file in the current working directory d
         }
     ]
 }
+```
+
+</details>
+
+
+
+<details>
+<summary>
+You can also call the argument parser agnostic version of the recorder directly. (Click me to see code)
+</summary>
+
+```python
+from datetime import datetime, UTC
+from pathlib import Path
+
+from rocrate_action_recorder import (
+    IOArgumentPath,
+    IOArgumentPaths,
+    Program,
+    record,
+)
+
+crate_dir = Path()
+input_path = crate_dir / "input.txt"
+output_path = crate_dir / "output.txt"
+input_path.write_text("Hello World\n")
+argv = [
+    "myscript",
+    "--input",
+    str(input_path),
+    "--output",
+    str(output_path),
+]
+start_time = datetime(2026, 1, 16, 12, 0, 0, tzinfo=UTC)
+# Simulate the script's main operation
+output_path.write_text(input_path.read_text().upper())
+end_time = datetime(2026, 1, 16, 12, 0, 5, tzinfo=UTC)
+
+crate_meta = record(
+    program=Program(
+        name="myscript", description="My test script", version="1.2.3"
+    ),
+    ioargs=IOArgumentPaths(
+        input_files=[
+            IOArgumentPath(name="input", path=input_path, help="Input file")
+        ],
+        output_files=[
+            IOArgumentPath(name="output", path=output_path, help="Output file")
+        ],
+    ),
+    argv=argv,
+    current_user="tester",
+    start_time=start_time,
+    end_time=end_time,
+    crate_dir=crate_dir,
+    dataset_license="CC-BY-4.0",
+)
+# crate_meta == Path("ro-crate-metadata.json")
 ```
 
 </details>
