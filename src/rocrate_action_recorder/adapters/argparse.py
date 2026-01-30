@@ -65,7 +65,6 @@ def try_convert_to_path(item: Any) -> Path | None:
             or item.name == "<stdout>"
             or item.name == "-"
         ):
-            # TODO can not use argparse.FileType for input/output directories, that makes no sense
             logger.warning(
                 "Unable to convert stdin/stdout file-like object to Path, ignoring it"
             )

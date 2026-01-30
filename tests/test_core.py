@@ -20,13 +20,9 @@ from rocrate_action_recorder.core import (
 def rocrate_validator(crate_dir: Path, severity: str = "required") -> list:
     # The validator takes ~2.6s on my machine, so use sparingly in tests
 
-    # TODO use more comprehensive provenance-run-crate profile, see https://w3id.org/ro/wfrun/provenance
-    # now uses process run crate profile, see https://www.researchobject.org/workflow-run-crate/profiles/0.5/process_run_crate/
-
     # tried use https://github.com/crs4/rocrate-validator/tree/develop?tab=readme-ov-file#programmatic-validation
     # but did give issues for recommended severity even though crate is invalid
     # switch to using cli call instead
-
     cmd = [
         "rocrate-validator",
         "validate",
