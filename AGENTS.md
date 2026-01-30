@@ -15,8 +15,12 @@ uv run --group docs sphinx-build docs docs/_build  # Build documentation
 - ruff
 - use type hints everywhere
 - Google style docstrings, in docstring to not repeat type as they are in function signature.
+
+## Testing
+
 - test naming: `test_<function under test>_<given>`
 - group tests on same function under `class Test_<function under test>:` with method `def test_<given>(self):`
+- test body structure should 3 parts: setup, execution, validation. Separate these parts with a blank line.
 
 ## Important
 
