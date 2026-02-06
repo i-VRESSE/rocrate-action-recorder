@@ -1,7 +1,7 @@
 """Core functionality for recording CLI invocations in RO-Crate format."""
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 import getpass
 import importlib.metadata
 import inspect
@@ -213,7 +213,7 @@ def record(
             current_user = getpass.getuser()
 
     if end_time is None:
-        end_time = datetime.now()
+        end_time = datetime.now(tz=UTC)
 
     if not program.version:
         program.version = detect_software_version(program.name)
