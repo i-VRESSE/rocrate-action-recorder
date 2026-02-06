@@ -1,8 +1,10 @@
 """Adapter for argparse CLI framework."""
 
 from argparse import _VersionAction, ArgumentParser, Namespace
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
+from functools import wraps
 from pathlib import Path
 from typing import Any
 import logging
@@ -235,7 +237,7 @@ def collect_record_info_from_argparse(
     return program, ioargs
 
 
-def record_with_argparse(
+def record_argparse(
     parser: ArgumentParser,
     ns: Namespace,
     ios: IOArgumentNames,
@@ -288,3 +290,70 @@ def record_with_argparse(
         current_user=current_user,
         dataset_license=dataset_license,
     )
+
+
+def recorded_argparse[T](
+    parser: ArgumentParser,
+    input_dirs: list[str] | None = None,
+    output_dirs: list[str] | None = None,
+    input_files: list[str] | None = None,
+    output_files: list[str] | None = None,
+    dataset_license: str | None = None,
+    enabled_argument: str | None = None,
+) -> Callable[[Callable[[Namespace], T]], Callable[[Namespace], T]]:
+    """Decorator to record a CLI invocation in an RO-Crate using argparse.
+
+    Args:
+        parser: The argument parser used to parse the command-line arguments.
+            This is needed to extract program information and help texts for the arguments.
+        input_dirs: List of argument names representing input directories
+        output_dirs: List of argument names representing output directories
+        input_files: List of argument names representing input files
+        output_files: List of argument names representing output files
+        dataset_license: License string for the dataset (e.g., "CC BY 4.0").
+                        If None, no license is recorded.
+        enabled_argument: Name of the attribute in args that indicates whether
+                       to record the invocation. Records if None.
+                       If provided, the invocation is only recorded if getattr(args, enabled_argument) is truthy.
+
+    Returns:
+        Decorator function
+
+    Raises:
+        ValueError:
+            If the current user cannot be determined.
+            If the specified paths are outside the crate root.
+            If the software version cannot be determined based on the program name.
+        MissingDestArgparseSubparserError:
+            If parser has subparsers but dest is not set.
+    """
+
+    def decorator(func: Callable[[Namespace], T]) -> Callable[[Namespace], T]:
+        @wraps(func)
+        def wrapper(args: Namespace) -> T:
+            start_datetime = datetime.now(tz=UTC)
+
+            result = func(args)
+
+            if enabled_argument is None or getattr(args, enabled_argument, False):
+                end_time = datetime.now(tz=UTC)
+                ios = IOArgumentNames(
+                    input_dirs=input_dirs or [],
+                    output_dirs=output_dirs or [],
+                    input_files=input_files or [],
+                    output_files=output_files or [],
+                )
+                record_argparse(
+                    parser=parser,
+                    ns=args,
+                    ios=ios,
+                    start_time=start_datetime,
+                    end_time=end_time,
+                    dataset_license=dataset_license,
+                )
+
+            return result
+
+        return wrapper
+
+    return decorator

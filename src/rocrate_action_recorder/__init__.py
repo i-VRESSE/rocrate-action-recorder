@@ -1,7 +1,8 @@
 """RO-Crate action recorder for CLI invocations."""
 
 from rocrate_action_recorder.adapters.argparse import (
-    record_with_argparse,
+    record_argparse,
+    recorded_argparse,
     IOArgumentNames,
 )
 from rocrate_action_recorder.core import (
@@ -13,7 +14,8 @@ from rocrate_action_recorder.core import (
 )
 
 __all__ = [
-    "record_with_argparse",
+    "record_argparse",
+    "recorded_argparse",
     "record",
     "playback",
     "Program",

@@ -1,6 +1,7 @@
 from argparse import ArgumentParser, FileType, Namespace
 from pathlib import Path
 
+from rocrate.rocrate import Metadata
 import pytest
 
 from rocrate_action_recorder.adapters.argparse import (
@@ -8,6 +9,7 @@ from rocrate_action_recorder.adapters.argparse import (
     collect_record_info_from_argparse,
     IOArgumentNames,
     MissingDestArgparseSubparserError,
+    recorded_argparse,
 )
 from rocrate_action_recorder.core import (
     IOArgumentPaths,
@@ -829,3 +831,121 @@ class Test_collect_record_info_from_argparse:
         )
 
         assert program.version == "2.0.0"
+
+
+class Test_recorded_argparse:
+    def test_defaults(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.chdir(tmp_path)
+        parser = ArgumentParser(prog="myscript")
+        parser.add_argument("--version", action="version", version="%(prog)s 1.2.3")
+
+        @recorded_argparse(
+            parser=parser,
+            input_dirs=[],
+            output_dirs=[],
+            dataset_license="CC-BY-4.0",
+        )
+        def handler(_: Namespace):
+            return 42
+
+        args = parser.parse_args([])
+        result = handler(args)
+
+        assert result == 42
+        crate_meta = tmp_path / Metadata.BASENAME
+        assert crate_meta.exists()
+
+    def test_without_prov_arg(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.chdir(tmp_path)
+        parser = ArgumentParser(prog="myscript")
+        parser.add_argument("--version", action="version", version="%(prog)s 1.2.3")
+        parser.add_argument(
+            "--prov",
+            action="store_true",
+            help="Whether to write provenance information about the command execution to rocreate-metadata.json file.",
+        )
+
+        @recorded_argparse(
+            parser=parser,
+            input_dirs=[],
+            output_dirs=[],
+            dataset_license="CC-BY-4.0",
+            enabled_argument="prov",
+        )
+        def handler(args: Namespace):
+            assert args.prov is False
+
+        args = parser.parse_args([])
+        handler(args)
+
+        crate_meta = tmp_path / Metadata.BASENAME
+        assert not crate_meta.exists()
+
+    def test_with_truthy_prov_arg(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.chdir(tmp_path)
+        parser = ArgumentParser(prog="myscript")
+        parser.add_argument("--version", action="version", version="%(prog)s 1.2.3")
+        parser.add_argument(
+            "--prov",
+            action="store_true",
+            help="Whether to write provenance information about the command execution to rocreate-metadata.json file.",
+        )
+
+        @recorded_argparse(
+            parser=parser,
+            input_dirs=[],
+            output_dirs=[],
+            dataset_license="CC-BY-4.0",
+            enabled_argument="prov",
+        )
+        def handler(args: Namespace):
+            assert args.prov is True
+
+        args = parser.parse_args(["--prov"])
+        handler(args)
+
+        crate_meta = tmp_path / Metadata.BASENAME
+        assert crate_meta.exists()
+
+    def test_with_all_ios(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.chdir(tmp_path)
+        parser = ArgumentParser(prog="myscript")
+        parser.add_argument("--version", action="version", version="%(prog)s 1.2.3")
+        parser.add_argument("input", type=Path, help="Input file")
+        parser.add_argument("output", type=Path, help="Output file")
+        parser.add_argument("input_dir", type=Path, help="Input directory")
+        parser.add_argument("output_dir", type=Path, help="Output directory")
+        input_file = tmp_path / "input.txt"
+        output_file = tmp_path / "output.txt"
+        input_file.write_text("Test data\n")
+        input_dir = tmp_path / "input_dir"
+        input_dir.mkdir()
+        output_dir = tmp_path / "output_dir"
+
+        @recorded_argparse(
+            parser=parser,
+            input_files=["input"],
+            output_files=["output"],
+            input_dirs=["input_dir"],
+            output_dirs=["output_dir"],
+            dataset_license="CC-BY-4.0",
+        )
+        def handler(args: Namespace):
+            args.output.write_text(args.input.read_text().upper())
+            args.output_dir.mkdir()
+
+        args = parser.parse_args(
+            [str(input_file), str(output_file), str(input_dir), str(output_dir)]
+        )
+        handler(args)
+
+        crate_meta = tmp_path / Metadata.BASENAME
+        assert crate_meta.exists()
+        body = crate_meta.read_text()
+        assert "input.txt" in body
+        assert "output.txt" in body
+        assert "input_dir" in body
+        assert "output_dir" in body
+        assert "CC-BY-4.0" in body
