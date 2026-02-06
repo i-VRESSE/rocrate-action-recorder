@@ -832,6 +832,26 @@ class Test_collect_record_info_from_argparse:
 
         assert program.version == "2.0.0"
 
+    def test_absent_optional_path(self):
+        parser = ArgumentParser(prog="myscript", description="Example CLI")
+        parser.add_argument("--version", action="version", version="%(prog)s 1.2.3")
+        parser.add_argument("--output", type=Path, help="Output file")
+        ns = parser.parse_args([])
+        names = IOArgumentNames(
+            output_files=["output"],
+        )
+
+        program, paths = collect_record_info_from_argparse(parser, ns, names)
+
+        expected_program = Program(
+            name="myscript",
+            description="Example CLI",
+            version="1.2.3",
+        )
+        assert program == expected_program
+        expected_paths = IOArgumentPaths()
+        assert paths == expected_paths
+
 
 class Test_recorded_argparse:
     def test_defaults(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
