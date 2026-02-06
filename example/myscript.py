@@ -5,7 +5,9 @@ from pathlib import Path
 from rocrate_action_recorder import recorded_argparse
 
 
-@lru_cache(maxsize=1)  # Cache the parser instance to avoid re-creating it for each handler
+@lru_cache(
+    maxsize=1
+)  # Cache the parser instance to avoid re-creating it for each handler
 def make_parser():
     parser = argparse.ArgumentParser(prog="myscript", description="Example CLI")
     parser.add_argument("--version", action="version", version="%(prog)s 1.0.0")

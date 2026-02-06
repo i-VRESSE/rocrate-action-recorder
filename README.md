@@ -1,10 +1,13 @@
 # rocrate-action-recorder
 
 <!-- SPHINX-START -->
+[![PyPI](https://img.shields.io/pypi/v/rocrate-action-recorder)](https://pypi.org/project/rocrate-action-recorder/)
+[![Research Software Directory Badge](https://img.shields.io/badge/rsd-00a3e3.svg)](https://research-software-directory.org/software/rocrate-action-recorder)
 [![github repo badge](https://img.shields.io/badge/github-repo-000.svg?logo=github&labelColor=gray&color=blue)](https://github.com/i-VRESSE/rocrate-action-recorder)
 [![github license badge](https://img.shields.io/github/license/i-VRESSE/rocrate-action-recorder)](https://github.com/i-VRESSE/rocrate-action-recorder)
 [![CI](https://github.com/i-VRESSE/rocrate-action-recorder/actions/workflows/ci.yml/badge.svg)](https://github.com/i-VRESSE/rocrate-action-recorder/actions/workflows/ci.yml)
 [![readthedocs](https://app.readthedocs.org/projects/rocrate-action-recorder/badge/?version=latest)](https://rocrate-action-recorder.readthedocs.io/en/latest/)
+
 
 Python package to record calls of Python CLI commands into a [Research Object Crate (RO-Crate)](https://www.researchobject.org/ro-crate/).
 
