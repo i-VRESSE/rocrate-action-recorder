@@ -7,7 +7,7 @@ uvx ruff format          # Format code
 uvx ruff check           # Check for issues
 uv run pyright           # Type check code
 uv build                 # Build package
-uv run --group docs sphinx-build docs docs/_build  # Build documentation
+uv run --group docs sphinx-build docs docs/_build  # Build documentation in docs/_build
 ```
 
 ## Style
