@@ -1481,7 +1481,9 @@ class Test_record:
             ],
         )
 
-    def test_1outputfile_in_nested_dir_relative_path(self, tmp_path: Path, monkeypatch):
+    def test_1outputfile_in_nested_dir_relative_path(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
         crate_dir = tmp_path
         nested_dir = crate_dir / "nested"
         nested_dir.mkdir()
@@ -1554,7 +1556,9 @@ class Test_record:
             ],
         )
 
-    def test_1inputdir_in_nested_dir_relative_path(self, tmp_path: Path, monkeypatch):
+    def test_1inputdir_in_nested_dir_relative_path(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
         crate_dir = tmp_path
         nested_dir = crate_dir / "nested"
         nested_dir.mkdir()
@@ -1625,7 +1629,7 @@ class Test_record:
             ],
         )
 
-    def test_inputfile_outside_of_crate(self, tmp_path):
+    def test_inputfile_outside_of_crate(self, tmp_path: Path):
         crate_dir = tmp_path / "mycrate"
         crate_dir.mkdir()
         input_path = tmp_path / "input.txt"
