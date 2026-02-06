@@ -11,8 +11,8 @@
 :end-before: <!-- SPHINX-END -->
 ```
 
-The main functions are:
-- [record_from_argparse](#rocrate_action_recorder.adapters.argparse.record_with_argparse) function.
+The main entry points are:
+- [recorded_argparse](#rocrate_action_recorder.adapters.argparse.recorded_argparse) decorator.
 - [record](#rocrate_action_recorder.core.record) function.
 
 ## Example

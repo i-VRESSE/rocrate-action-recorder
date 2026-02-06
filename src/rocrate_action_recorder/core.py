@@ -1,7 +1,7 @@
 """Core functionality for recording CLI invocations in RO-Crate format."""
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 import getpass
 import importlib.metadata
 import inspect
@@ -200,6 +200,8 @@ def record(
             If the current user cannot be determined.
             If the specified paths are outside the crate root.
             If the software version cannot be determined based on the program name.
+            If start_time and end_time have different timezone information.
+            If start_time is after end_time.
     """
     crate_root = Path(crate_dir or Path.cwd()).resolve().expanduser()
     crate_root.mkdir(parents=True, exist_ok=True)
@@ -213,7 +215,16 @@ def record(
             current_user = getpass.getuser()
 
     if end_time is None:
-        end_time = datetime.now()
+        end_time = datetime.now(tz=UTC)
+
+    if start_time.tzinfo != end_time.tzinfo:
+        raise ValueError(
+            f"start_time and end_time must have same timezone. Now start_time tzinfo is {start_time.tzinfo} and end_time tzinfo is {end_time.tzinfo}"
+        )
+    if start_time > end_time:
+        raise ValueError(
+            f"start_time must be before end_time. Now start_time is {start_time} and end_time is {end_time}"
+        )
 
     if not program.version:
         program.version = detect_software_version(program.name)

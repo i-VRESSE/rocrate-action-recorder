@@ -19,44 +19,39 @@ pip install rocrate-action-recorder
 
 ## Usage
 
-Shown is an example of recording a CLI command (`example-cli input.txt output.txt`) implemented with `argparse`.
+Example of recording a CLI command (`example-cli input.txt output.txt`) implemented with `argparse`.
 
 ```python
 import argparse
-from datetime import datetime
 from pathlib import Path
-from rocrate_action_recorder import record_with_argparse, IOArgumentNames
+import sys
 
-# Create an argparse parser
+from rocrate_action_recorder import recorded_argparse
+
 parser = argparse.ArgumentParser(prog="example-cli", description="Example CLI")
-parser.add_argument("--version", action="version", version="1.2.3")
+parser.add_argument("--version", action="version", version="%(prog)s 1.2.3")
+parser.add_argument("--no-record", action="store_false", help="Disable RO-Crate recording.")
 parser.add_argument("input", type=Path, help="Input file")
 parser.add_argument("output", type=Path, help="Output file")
 
+@recorded_argparse(
+    parser=parser,
+    input_files=["input"],
+    output_files=["output"],
+    dataset_license="CC-BY-4.0",
+    enabled_argument="no_record",
+)
+def handler(args: argparse.Namespace):
+    # For demonstration, just upper case input to output, replace with real logic
+    args.output.write_text(args.input.read_text().upper())
+
 # Prepare input
 Path("input.txt").write_text("hello")
+# Simulate command-line arguments
+sys.argv.extend(["input.txt", "output.txt"])
 
-# Parse arguments
-args = ['input.txt', 'output.txt']
-ns = parser.parse_args(args)
-
-# Do handling of the CLI command here
-start_time = datetime.now()
-# For demonstration, just upper case input to output
-Path(ns.output).write_text(ns.input.read_text().upper())
-
-record_with_argparse(
-    parser, 
-    ns, 
-    # Tell recorder which arguments are for input and output files
-    IOArgumentNames(input_files=["input"], output_files=["output"]),
-    start_time, 
-    dataset_license="CC-BY-4.0",
-    # argv argument is optional, in real usage you can omit it
-    argv=['example-cli'] + args,
-    # current_user argument is optional, in real usage you can omit it
-    current_user="someuser"
-)
+args = parser.parse_args()
+handler(args)
 ```
 
 <details>
@@ -161,9 +156,9 @@ Will generate a `ro-crate-metadata.json` file in the current working directory d
 }
 ```
 
+For you the startTime, endTime, and Person name will differ.
+
 </details>
-
-
 
 <details>
 <summary>

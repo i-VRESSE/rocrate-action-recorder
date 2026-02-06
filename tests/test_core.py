@@ -3,6 +3,8 @@ import importlib.metadata
 import json
 from pathlib import Path
 import subprocess
+from zoneinfo import ZoneInfo
+
 
 from pytest import LogCaptureFixture
 import pytest
@@ -1479,7 +1481,9 @@ class Test_record:
             ],
         )
 
-    def test_1outputfile_in_nested_dir_relative_path(self, tmp_path: Path, monkeypatch):
+    def test_1outputfile_in_nested_dir_relative_path(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
         crate_dir = tmp_path
         nested_dir = crate_dir / "nested"
         nested_dir.mkdir()
@@ -1552,7 +1556,9 @@ class Test_record:
             ],
         )
 
-    def test_1inputdir_in_nested_dir_relative_path(self, tmp_path: Path, monkeypatch):
+    def test_1inputdir_in_nested_dir_relative_path(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
         crate_dir = tmp_path
         nested_dir = crate_dir / "nested"
         nested_dir.mkdir()
@@ -1623,7 +1629,7 @@ class Test_record:
             ],
         )
 
-    def test_inputfile_outside_of_crate(self, tmp_path):
+    def test_inputfile_outside_of_crate(self, tmp_path: Path):
         crate_dir = tmp_path / "mycrate"
         crate_dir.mkdir()
         input_path = tmp_path / "input.txt"
@@ -1662,4 +1668,44 @@ class Test_record:
                 end_time=end_time,
                 crate_dir=crate_dir,
                 dataset_license="CC-BY-4.0",
+            )
+
+    @pytest.mark.parametrize(
+        "start_tz,end_tz",
+        [
+            (UTC, None),
+            (
+                ZoneInfo("America/New_York"),
+                ZoneInfo("Europe/London"),
+            ),
+        ],
+    )
+    def test_different_timezones(
+        self, tmp_path: Path, start_tz: ZoneInfo | None, end_tz: ZoneInfo | None
+    ):
+        with pytest.raises(
+            ValueError, match=r"start_time and end_time must have same timezone"
+        ):
+            record(
+                program=Program(
+                    name="myscript", description="My test script", version="1.2.3"
+                ),
+                ioargs=IOArgumentPaths(),
+                argv=["myscript"],
+                start_time=datetime(2026, 1, 16, 12, 0, 0, tzinfo=start_tz),
+                end_time=datetime(2026, 1, 16, 12, 0, 5, tzinfo=end_tz),
+                crate_dir=tmp_path,
+            )
+
+    def test_end_time_before_start_time(self, tmp_path: Path):
+        with pytest.raises(ValueError, match=r"start_time must be before end_time"):
+            record(
+                program=Program(
+                    name="myscript", description="My test script", version="1.2.3"
+                ),
+                ioargs=IOArgumentPaths(),
+                argv=["myscript"],
+                start_time=datetime(2026, 1, 16, 12, 0, 5, tzinfo=UTC),
+                end_time=datetime(2026, 1, 16, 12, 0, 0, tzinfo=UTC),
+                crate_dir=tmp_path,
             )

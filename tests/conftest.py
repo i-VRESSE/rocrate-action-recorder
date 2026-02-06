@@ -17,4 +17,5 @@ def suppress_rocrate_warnings():
     logger = logging.getLogger("rocrate_validator.models")
     logger.addFilter(ConjunctiveGraphFilter())
 
+
 # TODO write pytest tests that run the python code blocks in README.md
