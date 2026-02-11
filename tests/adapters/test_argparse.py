@@ -1154,3 +1154,26 @@ class Test_recorded_argparse:
             match="Argument '_parser' is not an ArgumentParser instance, it is a <class 'str'>",
         ):
             handler(args)
+
+    def test_with_parser_argument_missing_parser(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.chdir(tmp_path)
+
+        @recorded_argparse(
+            input_files=[],
+            output_files=[],
+            input_dirs=[],
+            output_dirs=[],
+            dataset_license="CC-BY-4.0",
+            parser_argument="_parser",
+        )
+        def handler(args: Namespace):
+            pass
+
+        args = Namespace()  # _parser argument is missing
+
+        with pytest.raises(
+            AttributeError, match="'Namespace' object has no attribute '_parser'"
+        ):
+            handler(args)

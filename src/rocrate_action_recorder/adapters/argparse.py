@@ -366,6 +366,10 @@ def recorded_argparse[T](
             If the specified paths are outside the crate root.
             If the software version cannot be determined based on the program name.
             If both crate_dir and crate_dir_argument are specified.
+            If both parser and parser_argument are specified.
+            If parser_argument is specified but does not point to an ArgumentParser instance.
+        AttributeError:
+            If parser_argument is specified but not found in args.
         MissingDestArgparseSubparserError:
             If parser has subparsers but dest is not set.
     """
