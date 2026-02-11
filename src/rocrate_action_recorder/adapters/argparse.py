@@ -178,7 +178,7 @@ class IOArgumentNames:
 
     Hint:
         The argument names should be attributes on a :class:`argparse.Namespace` object
-        returned by :attr:`parse_args() <argparse.ArgumentParser.parse_args>`.
+        returned by :meth:`parse_args() <argparse.ArgumentParser.parse_args>`.
         For example `parser.add_argument('--input-file')`
         would correspond to argument name `input_file`.
     """
@@ -260,7 +260,7 @@ def record_argparse(
 
     Hint:
         The argument names passed in :class:`IOArgumentNames` should be attributes on a :class:`argparse.Namespace` object
-        returned by :attr:`parse_args() <argparse.ArgumentParser.parse_args>`.
+        returned by :meth:`parse_args() <argparse.ArgumentParser.parse_args>`.
         For example `parser.add_argument('--input-file')`
         would correspond to argument name `input_file`.
 
@@ -324,7 +324,7 @@ def recorded_argparse[T](
 
     Hint:
         The argument names should be attributes on a :class:`argparse.Namespace` object
-        returned by :attr:`parse_args() <argparse.ArgumentParser.parse_args>`.
+        returned by :meth:`parse_args() <argparse.ArgumentParser.parse_args>`.
         For example `parser.add_argument('--input-file')`
         would correspond to argument name `input_file`.
 
