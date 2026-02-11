@@ -1,13 +1,9 @@
 #!/usr/bin/env python3
 import argparse
-from functools import lru_cache
 from pathlib import Path
 from rocrate_action_recorder import recorded_argparse
 
 
-@lru_cache(
-    maxsize=1
-)  # Cache the parser instance to avoid re-creating it for each handler
 def make_parser():
     parser = argparse.ArgumentParser(prog="myscript", description="Example CLI")
     parser.add_argument("--version", action="version", version="%(prog)s 1.0.0")
@@ -17,7 +13,7 @@ def make_parser():
 
 
 @recorded_argparse(
-    parser=make_parser(),
+    parser_argument="_parser",
     input_files=["input"],
     output_files=["output"],
     dataset_license="CC-BY-4.0",
@@ -30,6 +26,7 @@ def handler(args: argparse.Namespace) -> int:
 def main():
     parser = make_parser()
     args = parser.parse_args()
+    args._parser = parser
     handler(args)
 
 
