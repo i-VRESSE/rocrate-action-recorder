@@ -310,7 +310,8 @@ def record_argparse(
 
 
 def recorded_argparse[T](
-    parser: ArgumentParser,
+    parser: ArgumentParser | None = None,
+    parser_argument: str | None = None,
     input_dirs: list[str] | None = None,
     output_dirs: list[str] | None = None,
     input_files: list[str] | None = None,
@@ -335,21 +336,26 @@ def recorded_argparse[T](
     Args:
         parser: The argument parser used to parse the command-line arguments.
             This is needed to extract program information and help texts for the arguments.
+            Can not be used together with the `parser_argument` parameter.
+        parser_argument: The name of the attribute in :class:`argparse.Namespace` object
+            that contains the :class:`argparse.ArgumentParser` object.
+            Can not be used together with the `parser` parameter.
         input_dirs: List of argument names representing input directories
         output_dirs: List of argument names representing output directories
         input_files: List of argument names representing input files
         output_files: List of argument names representing output files
-        dataset_license: License string for the dataset (e.g., "CC BY 4.0").
+        dataset_license: License string for the dataset.
+            Use license identifiers from https://spdx.org/licenses/ if possible.
             If None, no license is recorded.
         enabled_argument: Name of the attribute in args that indicates whether
             to record the invocation. Records if None.
-            If provided, the invocation is only recorded if getattr(args, enabled_argument) is truthy.
+            If provided, the invocation is only recorded if `getattr(args, enabled_argument)` is truthy.
         crate_dir: Optional path to the RO-Crate directory.
             If None, uses current working directory.
-            Can not be used together with the crate_dir_argument parameter.
+            Can not be used together with the `crate_dir_argument` parameter.
         crate_dir_argument: Name of the attribute in args that specifies the RO-Crate directory.
             If None, uses the current working directory.
-            Can not be used together with the crate_dir parameter.
+            Can not be used together with the `crate_dir` parameter.
 
     Returns:
         Decorator function
@@ -360,6 +366,10 @@ def recorded_argparse[T](
             If the specified paths are outside the crate root.
             If the software version cannot be determined based on the program name.
             If both crate_dir and crate_dir_argument are specified.
+            If both parser and parser_argument are specified.
+            If parser_argument is specified but does not point to an ArgumentParser instance.
+        AttributeError:
+            If parser_argument is specified but not found in args.
         MissingDestArgparseSubparserError:
             If parser has subparsers but dest is not set.
     """
@@ -390,8 +400,20 @@ def recorded_argparse[T](
                     input_files=input_files or [],
                     output_files=output_files or [],
                 )
+                if parser is not None and parser_argument is not None:
+                    raise ValueError("Cannot specify both parser and parser_argument")
+                if parser is not None:
+                    used_parser = parser
+                elif parser_argument is not None:
+                    used_parser = getattr(args, parser_argument)
+                    if not isinstance(used_parser, ArgumentParser):
+                        raise ValueError(
+                            f"Argument '{parser_argument}' is not an ArgumentParser instance, it is a {type(used_parser)}"
+                        )
+                else:
+                    raise ValueError("Must specify either parser or parser_argument")
                 record_argparse(
-                    parser=parser,
+                    parser=used_parser,
                     ns=args,
                     ios=ios,
                     start_time=start_datetime,
