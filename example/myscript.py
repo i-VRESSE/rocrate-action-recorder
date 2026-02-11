@@ -26,6 +26,7 @@ def handler(args: argparse.Namespace) -> int:
 def main():
     parser = make_parser()
     args = parser.parse_args()
+    # Inject the parser into the args for the decorator to use
     args._parser = parser
     handler(args)
 
