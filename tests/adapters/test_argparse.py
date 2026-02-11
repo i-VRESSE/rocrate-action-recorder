@@ -1059,3 +1059,98 @@ class Test_recorded_argparse:
             ValueError, match="Cannot specify both crate_dir and crate_dir_argument"
         ):
             handler(args)
+
+    def test_with_parser_in_args(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.chdir(tmp_path)
+        parser = ArgumentParser(prog="myscript")
+        parser.add_argument("--version", action="version", version="%(prog)s 1.2.3")
+
+        @recorded_argparse(
+            input_files=[],
+            output_files=[],
+            input_dirs=[],
+            output_dirs=[],
+            dataset_license="CC-BY-4.0",
+            parser_argument="_parser",
+        )
+        def handler(args: Namespace):
+            pass
+
+        args = parser.parse_args([])
+        args._parser = parser  # Inject the parser into args
+        handler(args)
+
+        crate_meta = tmp_path / Metadata.BASENAME
+        assert crate_meta.exists()
+
+    def test_without_parser_or_parser_argument(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.chdir(tmp_path)
+
+        @recorded_argparse(
+            input_files=[],
+            output_files=[],
+            input_dirs=[],
+            output_dirs=[],
+            dataset_license="CC-BY-4.0",
+        )
+        def handler(args: Namespace):
+            pass
+
+        args = Namespace()
+        with pytest.raises(
+            ValueError, match="Must specify either parser or parser_argument"
+        ):
+            handler(args)
+
+    def test_with_parser_and_parser_argument(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.chdir(tmp_path)
+        parser = ArgumentParser(prog="myscript")
+
+        @recorded_argparse(
+            parser=parser,
+            input_files=[],
+            output_files=[],
+            input_dirs=[],
+            output_dirs=[],
+            dataset_license="CC-BY-4.0",
+            parser_argument="_parser",
+        )
+        def handler(args: Namespace):
+            pass
+
+        args = Namespace()
+        args._parser = parser  # Inject the parser into args
+
+        with pytest.raises(
+            ValueError, match="Cannot specify both parser and parser_argument"
+        ):
+            handler(args)
+
+    def test_with_parser_argument_wrong_type(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.chdir(tmp_path)
+
+        @recorded_argparse(
+            input_files=[],
+            output_files=[],
+            input_dirs=[],
+            output_dirs=[],
+            dataset_license="CC-BY-4.0",
+            parser_argument="_parser",
+        )
+        def handler(args: Namespace):
+            pass
+
+        args = Namespace()
+        args._parser = "not a parser"  # Inject a non-ArgumentParser object
+
+        with pytest.raises(
+            ValueError,
+            match="Argument '_parser' is not an ArgumentParser instance, it is a <class 'str'>",
+        ):
+            handler(args)
