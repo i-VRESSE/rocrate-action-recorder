@@ -14,7 +14,7 @@ uv run --group docs sphinx-build docs docs/_build  # Build documentation in docs
 
 - ruff
 - use type hints everywhere
-- Google style docstrings, in docstring to not repeat type as they are in function signature.
+- Google style docstrings, in docstring do not repeat type as they are in function signature.
 
 ## Testing
 
