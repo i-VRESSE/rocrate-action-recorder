@@ -757,8 +757,14 @@ dependencies = [
     { name = "rocrate" },
 ]
 
+[package.optional-dependencies]
+click = [
+    { name = "click" },
+]
+
 [package.dev-dependencies]
 dev = [
+    { name = "click" },
     { name = "pyright" },
     { name = "pytest" },
     { name = "pytest-cov" },
@@ -773,6 +779,7 @@ docs = [
     { name = "sphinx-copybutton" },
 ]
 test = [
+    { name = "click" },
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "roc-validator" },
@@ -782,10 +789,15 @@ typecheck = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "rocrate", specifier = ">=0.14.2" }]
+requires-dist = [
+    { name = "click", marker = "extra == 'click'", specifier = ">=8.1.0" },
+    { name = "rocrate", specifier = ">=0.14.2" },
+]
+provides-extras = ["click"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "click", specifier = ">=8.1.0" },
     { name = "pyright", specifier = ">=1.1.408" },
     { name = "pytest", specifier = ">=9.0.2" },
     { name = "pytest-cov", specifier = ">=7.0.0" },
@@ -800,6 +812,7 @@ docs = [
     { name = "sphinx-copybutton" },
 ]
 test = [
+    { name = "click", specifier = ">=8.1.0" },
     { name = "pytest", specifier = ">=9.0.2" },
     { name = "pytest-cov", specifier = ">=7.0.0" },
     { name = "roc-validator", specifier = ">=0.8.0" },

@@ -17,4 +17,4 @@ The main entry points are:
 
 ## Example
 
-See the [example](https://github.com/i-VRESSE/rocrate-action-recorder/tree/main/example) folder for a minimal example.
+See the [argparse example](https://github.com/i-VRESSE/rocrate-action-recorder/tree/main/example/argparse) and [click example](https://github.com/i-VRESSE/rocrate-action-recorder/tree/main/example/click).

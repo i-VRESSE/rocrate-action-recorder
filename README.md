@@ -13,11 +13,18 @@ Python package to record calls of Python CLI commands into a [Research Object Cr
 
 Supports [RO-Crate 1.1](https://www.researchobject.org/ro-crate/specification/1.1/index.html) specification.
 Specifically the [Process Run Crate profile](https://www.researchobject.org/workflow-run-crate/profiles/0.5/process_run_crate/).
+Provides adapters for both `argparse` and `click` based CLIs.
 
 ## Install
 
 ```shell
 pip install rocrate-action-recorder
+```
+
+For Click support, install the optional extra:
+
+```shell
+pip install "rocrate-action-recorder[click]"
 ```
 
 ## Usage
@@ -223,7 +230,7 @@ crate_meta = record(
 
 ## Example
 
-See the [example](example/README.md) folder for a minimal example.
+See the [argparse example](example/argparse/README.md) and [click example](example/click/README.md).
 
 ### Contributions
 

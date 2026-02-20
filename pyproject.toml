@@ -25,6 +25,11 @@ classifiers = [
 "Issues" = "https://github.com/i-VRESSE/rocrate-action-recorder/issues"
 "Documentation" = "https://rocrate-action-recorder.readthedocs.io/"
 
+[project.optional-dependencies]
+click = [
+  "click>=8.1.0",
+]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
@@ -41,6 +46,7 @@ typecheck = [
     "pyright>=1.1.408",
 ]
 test = [
+  "click>=8.1.0",
     "pytest>=9.0.2",
     "pytest-cov>=7.0.0",
     "roc-validator>=0.8.0",
