@@ -969,3 +969,211 @@ class Test_recorded_argparse:
         assert "input_dir" in body
         assert "output_dir" in body
         assert "CC-BY-4.0" in body
+
+    def test_with_crate_dir(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.chdir(tmp_path)
+        parser = ArgumentParser(prog="myscript")
+        parser.add_argument("--version", action="version", version="%(prog)s 1.2.3")
+        parser.add_argument("input", type=Path, help="Input file")
+        crate_dir = tmp_path / "my_crate"
+        crate_dir.mkdir()
+        input_file = crate_dir / "input.txt"
+        input_file.write_text("Test data\n")
+
+        @recorded_argparse(
+            parser=parser,
+            input_files=["input"],
+            output_files=[],
+            input_dirs=[],
+            output_dirs=[],
+            dataset_license="CC-BY-4.0",
+            crate_dir=crate_dir,
+        )
+        def handler(args: Namespace):
+            pass
+
+        args = parser.parse_args([str(input_file)])
+        handler(args)
+
+        crate_meta = crate_dir / Metadata.BASENAME
+        assert crate_meta.exists()
+
+    def test_with_crate_dir_argument(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.chdir(tmp_path)
+        parser = ArgumentParser(prog="myscript")
+        parser.add_argument("--version", action="version", version="%(prog)s 1.2.3")
+        parser.add_argument(
+            "--session-dir", type=Path, help="Directory to create crate in"
+        )
+        session_dir = tmp_path / "out"
+
+        @recorded_argparse(
+            parser=parser,
+            input_files=[],
+            output_files=[],
+            input_dirs=[],
+            output_dirs=["session_dir"],
+            dataset_license="CC-BY-4.0",
+            crate_dir_argument="session_dir",
+        )
+        def handler(args: Namespace):
+            args.session_dir.mkdir()
+            (args.session_dir / "out.txt").write_text("Output data\n")
+
+        args = parser.parse_args(["--session-dir", str(session_dir)])
+        handler(args)
+
+        crate_meta = session_dir / Metadata.BASENAME
+        assert crate_meta.exists()
+
+    def test_with_crate_dir_and_crate_dir_argument(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.chdir(tmp_path)
+        parser = ArgumentParser(prog="myscript")
+        parser.add_argument("--version", action="version", version="%(prog)s 1.2.3")
+        parser.add_argument(
+            "--session-dir", type=Path, help="Directory to create crate in"
+        )
+        session_dir = tmp_path / "out"
+
+        @recorded_argparse(
+            parser=parser,
+            input_files=[],
+            output_files=[],
+            input_dirs=[],
+            output_dirs=["session_dir"],
+            dataset_license="CC-BY-4.0",
+            crate_dir=tmp_path / "my_crate",
+            crate_dir_argument="session_dir",
+        )
+        def handler(args: Namespace):
+            args.session_dir.mkdir()
+            (args.session_dir / "out.txt").write_text("Output data\n")
+
+        args = parser.parse_args(["--session-dir", str(session_dir)])
+
+        with pytest.raises(
+            ValueError, match="Cannot specify both crate_dir and crate_dir_argument"
+        ):
+            handler(args)
+
+    def test_with_parser_in_args(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.chdir(tmp_path)
+        parser = ArgumentParser(prog="myscript")
+        parser.add_argument("--version", action="version", version="%(prog)s 1.2.3")
+
+        @recorded_argparse(
+            input_files=[],
+            output_files=[],
+            input_dirs=[],
+            output_dirs=[],
+            dataset_license="CC-BY-4.0",
+            parser_argument="_parser",
+        )
+        def handler(args: Namespace):
+            pass
+
+        args = parser.parse_args([])
+        args._parser = parser  # Inject the parser into args
+        handler(args)
+
+        crate_meta = tmp_path / Metadata.BASENAME
+        assert crate_meta.exists()
+
+    def test_without_parser_or_parser_argument(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.chdir(tmp_path)
+
+        @recorded_argparse(
+            input_files=[],
+            output_files=[],
+            input_dirs=[],
+            output_dirs=[],
+            dataset_license="CC-BY-4.0",
+        )
+        def handler(args: Namespace):
+            pass
+
+        args = Namespace()
+        with pytest.raises(
+            ValueError, match="Must specify either parser or parser_argument"
+        ):
+            handler(args)
+
+    def test_with_parser_and_parser_argument(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.chdir(tmp_path)
+        parser = ArgumentParser(prog="myscript")
+
+        @recorded_argparse(
+            parser=parser,
+            input_files=[],
+            output_files=[],
+            input_dirs=[],
+            output_dirs=[],
+            dataset_license="CC-BY-4.0",
+            parser_argument="_parser",
+        )
+        def handler(args: Namespace):
+            pass
+
+        args = Namespace()
+        args._parser = parser  # Inject the parser into args
+
+        with pytest.raises(
+            ValueError, match="Cannot specify both parser and parser_argument"
+        ):
+            handler(args)
+
+    def test_with_parser_argument_wrong_type(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.chdir(tmp_path)
+
+        @recorded_argparse(
+            input_files=[],
+            output_files=[],
+            input_dirs=[],
+            output_dirs=[],
+            dataset_license="CC-BY-4.0",
+            parser_argument="_parser",
+        )
+        def handler(args: Namespace):
+            pass
+
+        args = Namespace()
+        args._parser = "not a parser"  # Inject a non-ArgumentParser object
+
+        with pytest.raises(
+            ValueError,
+            match="Argument '_parser' is not an ArgumentParser instance, it is a <class 'str'>",
+        ):
+            handler(args)
+
+    def test_with_parser_argument_missing_parser(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.chdir(tmp_path)
+
+        @recorded_argparse(
+            input_files=[],
+            output_files=[],
+            input_dirs=[],
+            output_dirs=[],
+            dataset_license="CC-BY-4.0",
+            parser_argument="_parser",
+        )
+        def handler(args: Namespace):
+            pass
+
+        args = Namespace()  # _parser argument is missing
+
+        with pytest.raises(
+            AttributeError, match="'Namespace' object has no attribute '_parser'"
+        ):
+            handler(args)

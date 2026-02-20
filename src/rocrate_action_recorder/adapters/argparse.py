@@ -174,7 +174,14 @@ def program_from_parser(parser: ArgumentParser, ns: Namespace) -> Program:
 
 @dataclass
 class IOArgumentNames:
-    """Which argument names have values that are input/output files or directories."""
+    """Which argument names have values that are input/output files or directories.
+
+    Hint:
+        The argument names should be attributes on a :class:`argparse.Namespace` object
+        returned by :meth:`parse_args() <argparse.ArgumentParser.parse_args>`.
+        For example `parser.add_argument('--input-file')`
+        would correspond to argument name `input_file`.
+    """
 
     input_files: list[str] = field(default_factory=list[str])
     """List of argument names for input files."""
@@ -251,6 +258,16 @@ def record_argparse(
 ) -> Path:
     """Record a CLI invocation in an RO-Crate using argparse.
 
+    Hint:
+        The argument names passed in :class:`IOArgumentNames` should be attributes on a :class:`argparse.Namespace` object
+        returned by :meth:`parse_args() <argparse.ArgumentParser.parse_args>`.
+        For example `parser.add_argument('--input-file')`
+        would correspond to argument name `input_file`.
+
+    Warning:
+        A RO-Crate can only be written to the directory that
+        contains all the input/output files and directories.
+
     Args:
         parser: The argparse.ArgumentParser used to parse the arguments.
         ns: The argparse.Namespace with parsed arguments.
@@ -293,28 +310,52 @@ def record_argparse(
 
 
 def recorded_argparse[T](
-    parser: ArgumentParser,
+    parser: ArgumentParser | None = None,
+    parser_argument: str | None = None,
     input_dirs: list[str] | None = None,
     output_dirs: list[str] | None = None,
     input_files: list[str] | None = None,
     output_files: list[str] | None = None,
     dataset_license: str | None = None,
     enabled_argument: str | None = None,
+    crate_dir: Path | None = None,
+    crate_dir_argument: str | None = None,
 ) -> Callable[[Callable[[Namespace], T]], Callable[[Namespace], T]]:
     """Decorator to record a CLI invocation in an RO-Crate using argparse.
+
+    Hint:
+        The argument names should be attributes on a :class:`argparse.Namespace` object
+        returned by :meth:`parse_args() <argparse.ArgumentParser.parse_args>`.
+        For example `parser.add_argument('--input-file')`
+        would correspond to argument name `input_file`.
+
+    Warning:
+        A RO-Crate can only be written to the directory that
+        contains all the input/output files and directories.
 
     Args:
         parser: The argument parser used to parse the command-line arguments.
             This is needed to extract program information and help texts for the arguments.
+            Can not be used together with the `parser_argument` parameter.
+        parser_argument: The name of the attribute in :class:`argparse.Namespace` object
+            that contains the :class:`argparse.ArgumentParser` object.
+            Can not be used together with the `parser` parameter.
         input_dirs: List of argument names representing input directories
         output_dirs: List of argument names representing output directories
         input_files: List of argument names representing input files
         output_files: List of argument names representing output files
-        dataset_license: License string for the dataset (e.g., "CC BY 4.0").
-                        If None, no license is recorded.
+        dataset_license: License string for the dataset.
+            Use license identifiers from https://spdx.org/licenses/ if possible.
+            If None, no license is recorded.
         enabled_argument: Name of the attribute in args that indicates whether
-                       to record the invocation. Records if None.
-                       If provided, the invocation is only recorded if getattr(args, enabled_argument) is truthy.
+            to record the invocation. Records if None.
+            If provided, the invocation is only recorded if `getattr(args, enabled_argument)` is truthy.
+        crate_dir: Optional path to the RO-Crate directory.
+            If None, uses current working directory.
+            Can not be used together with the `crate_dir_argument` parameter.
+        crate_dir_argument: Name of the attribute in args that specifies the RO-Crate directory.
+            If None, uses the current working directory.
+            Can not be used together with the `crate_dir` parameter.
 
     Returns:
         Decorator function
@@ -324,6 +365,11 @@ def recorded_argparse[T](
             If the current user cannot be determined.
             If the specified paths are outside the crate root.
             If the software version cannot be determined based on the program name.
+            If both crate_dir and crate_dir_argument are specified.
+            If both parser and parser_argument are specified.
+            If parser_argument is specified but does not point to an ArgumentParser instance.
+        AttributeError:
+            If parser_argument is specified but not found in args.
         MissingDestArgparseSubparserError:
             If parser has subparsers but dest is not set.
     """
@@ -336,6 +382,17 @@ def recorded_argparse[T](
             result = func(args)
 
             if enabled_argument is None or getattr(args, enabled_argument, False):
+                if crate_dir and crate_dir_argument:
+                    raise ValueError(
+                        "Cannot specify both crate_dir and crate_dir_argument"
+                    )
+                my_crate_dir: Path | None = None
+                if crate_dir is not None:
+                    my_crate_dir = crate_dir
+                if crate_dir_argument:
+                    args_crate_dir = getattr(args, crate_dir_argument, None)
+                    if args_crate_dir is not None:
+                        my_crate_dir = Path(args_crate_dir)
                 end_time = datetime.now(tz=UTC)
                 ios = IOArgumentNames(
                     input_dirs=input_dirs or [],
@@ -343,12 +400,25 @@ def recorded_argparse[T](
                     input_files=input_files or [],
                     output_files=output_files or [],
                 )
+                if parser is not None and parser_argument is not None:
+                    raise ValueError("Cannot specify both parser and parser_argument")
+                if parser is not None:
+                    used_parser = parser
+                elif parser_argument is not None:
+                    used_parser = getattr(args, parser_argument)
+                    if not isinstance(used_parser, ArgumentParser):
+                        raise ValueError(
+                            f"Argument '{parser_argument}' is not an ArgumentParser instance, it is a {type(used_parser)}"
+                        )
+                else:
+                    raise ValueError("Must specify either parser or parser_argument")
                 record_argparse(
-                    parser=parser,
+                    parser=used_parser,
                     ns=args,
                     ios=ios,
                     start_time=start_datetime,
                     end_time=end_time,
+                    crate_dir=my_crate_dir,
                     dataset_license=dataset_license,
                 )
 

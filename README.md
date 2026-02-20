@@ -10,6 +10,7 @@
 
 
 Python package to record calls of Python CLI commands into a [Research Object Crate (RO-Crate)](https://www.researchobject.org/ro-crate/).
+Useful to track which commands were executed, which files were used as input or output, and which software was used to execute the command.
 
 Supports [RO-Crate 1.1](https://www.researchobject.org/ro-crate/specification/1.1/index.html) specification.
 Specifically the [Process Run Crate profile](https://www.researchobject.org/workflow-run-crate/profiles/0.5/process_run_crate/).
