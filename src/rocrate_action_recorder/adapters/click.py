@@ -1,7 +1,6 @@
 """Adapter for Click CLI framework."""
 
 from collections.abc import Callable
-from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from functools import wraps
 from pathlib import Path
@@ -16,22 +15,13 @@ from rocrate_action_recorder.core import (
     Program,
     record,
 )
+from rocrate_action_recorder.adapters.shared import (
+    IOArgumentNames,
+    try_convert_to_path as shared_try_convert_to_path,
+    value2paths,
+)
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class IOArgumentNames:
-    """Which argument names have values that are input/output files or directories."""
-
-    input_files: list[str] = field(default_factory=list[str])
-    """List of argument names for input files."""
-    output_files: list[str] = field(default_factory=list[str])
-    """List of argument names for output files."""
-    input_dirs: list[str] = field(default_factory=list[str])
-    """List of argument names for input directories."""
-    output_dirs: list[str] = field(default_factory=list[str])
-    """List of argument names for output directories."""
 
 
 def click_help(ctx: click.Context, arg_name: str) -> str | None:
@@ -50,28 +40,6 @@ def click_help(ctx: click.Context, arg_name: str) -> str | None:
     return None
 
 
-def try_convert_to_path(item: Any) -> Path | None:
-    """Try to convert a single item to a Path."""
-    if isinstance(item, Path):
-        return item
-    if hasattr(item, "name"):
-        if (
-            item.name is None
-            or item.name == "<stdin>"
-            or item.name == "<stdout>"
-            or item.name == "-"
-        ):
-            logger.warning(
-                "Unable to convert stdin/stdout file-like object to Path, ignoring it"
-            )
-            return None
-        return Path(item.name)
-    if item is None:
-        logger.warning("Unable to convert None to Path, ignoring it")
-        return None
-    return Path(item)
-
-
 def click_value2paths(value: Any) -> list[Path]:
     """Convert a Click parameter value to a list of Path objects.
 
@@ -84,25 +52,12 @@ def click_value2paths(value: Any) -> list[Path]:
     Returns:
         A list of deduplicated paths.
     """
-    paths: list[Path] = []
-    if isinstance(value, (list, tuple)):
-        for item in value:
-            path = try_convert_to_path(item)
-            if path is not None:
-                paths.append(path)
-    else:
-        path = try_convert_to_path(value)
-        if path is not None:
-            paths.append(path)
+    return value2paths(value)
 
-    seen: set[Path] = set()
-    deduplicated: list[Path] = []
-    for path in paths:
-        if path not in seen:
-            seen.add(path)
-            deduplicated.append(path)
 
-    return deduplicated
+def try_convert_to_path(item: Any) -> Path | None:
+    """Try to convert a single item to a Path."""
+    return shared_try_convert_to_path(item)
 
 
 def program_from_context(ctx: click.Context) -> Program:
@@ -217,6 +172,12 @@ def record_click(
 ) -> Path:
     """Record a CLI invocation in an RO-Crate using Click.
 
+    Hint:
+        The argument names passed in :class:`IOArgumentNames` should match keys in
+        `params` (typically `ctx.params`), which are the normalized Click parameter
+        names. For example `@click.option('--input-file')` usually corresponds to
+        parameter name `input_file`.
+
     Args:
         ctx: Current Click context.
         params: Parsed Click parameters.
@@ -259,6 +220,12 @@ def recorded_click[T](
     enabled_argument: str | None = None,
 ) -> Callable[[Callable[..., T]], Callable[..., T]]:
     """Decorator to record a CLI invocation in an RO-Crate using Click.
+
+    Hint:
+        The argument names for `input_dirs`, `output_dirs`, `input_files`, and
+        `output_files` should match keys in `ctx.params` (normalized Click parameter
+        names). For example `@click.option('--input-file')` usually corresponds to
+        parameter name `input_file`.
 
     Args:
         input_dirs: Parameter names representing input directories.
