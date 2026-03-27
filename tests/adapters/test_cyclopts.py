@@ -1,11 +1,12 @@
+from dataclasses import dataclass
+import json
 from pathlib import Path
+from typing import Annotated
 
 import pytest
 import rocrate_action_recorder.adapters.cyclopts as cyclopts_adapter
 
-from typing import Annotated
-
-from cyclopts import App
+from cyclopts import App, Parameter
 from rocrate_action_recorder.adapters.cyclopts import (
     INPUT_FILE,
     OUTPUT_FILE,
@@ -117,13 +118,184 @@ class TestRunWithRecord:
             captured["record"] = id(kwargs["argument_collection"])
             return tmp_path / "ro-crate-metadata.json"
 
-        monkeypatch.setattr(cyclopts_adapter, "_detect_ios_and_trigger", fake_detect_ios_and_trigger)
+        monkeypatch.setattr(
+            cyclopts_adapter, "_detect_ios_and_trigger", fake_detect_ios_and_trigger
+        )
         monkeypatch.setattr(cyclopts_adapter, "record_cyclopts", fake_record_cyclopts)
 
         with pytest.raises(SystemExit):
             run_with_record(app, tokens=[])
 
         assert captured["detect"] == captured["record"]
+
+
+class TestRunWithRecordSingleLevelSubcommand:
+    def test_subcommand_single_level(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.chdir(tmp_path)
+        input_file = tmp_path / "input.txt"
+        input_file.write_text("data")
+        output_file = tmp_path / "output.txt"
+
+        app = App(name="myapp")
+
+        @app.command
+        def process(
+            input: Annotated[Path, INPUT_FILE],
+            output: Annotated[Path, OUTPUT_FILE],
+        ):
+            "Process files."
+            output.write_text(input.read_text().upper())
+
+        @app.command
+        def validate(schema: Annotated[Path, INPUT_FILE]):
+            "Validate files."
+            pass
+
+        with pytest.raises(SystemExit):
+            run_with_record(
+                app,
+                dataset_license="CC-BY-4.0",
+                tokens=["process", str(input_file), str(output_file)],
+            )
+
+        crate_path = tmp_path / "ro-crate-metadata.json"
+        assert crate_path.exists()
+        graph = {e["@id"]: e for e in json.loads(crate_path.read_text())["@graph"]}
+
+        action = next(e for e in graph.values() if e.get("@type") == "CreateAction")
+        expected_action_id = f"process {input_file} {output_file}"
+        assert action["@id"] == expected_action_id
+        assert action["name"] == expected_action_id
+        input_ids = {o["@id"] for o in action.get("object", [])}
+        output_ids = {r["@id"] for r in action.get("result", [])}
+        assert "input.txt" in input_ids
+        assert "output.txt" in output_ids
+        assert not any("schema" in eid for eid in graph)
+
+    def test_subcommand_with_trigger(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.chdir(tmp_path)
+        input_file = tmp_path / "input.txt"
+        input_file.write_text("data")
+        output_file = tmp_path / "output.txt"
+
+        app = App(name="myapp")
+
+        @app.command
+        def process(
+            input: Annotated[Path, INPUT_FILE],
+            output: Annotated[Path, OUTPUT_FILE],
+            *,
+            prov: Annotated[bool, RECORD_TRIGGER] = False,
+        ):
+            "Process files."
+            output.write_text(input.read_text().upper())
+            return output.stat().st_size
+
+        with pytest.raises(SystemExit) as exc_info:
+            run_with_record(
+                app,
+                dataset_license="CC-BY-4.0",
+                tokens=["process", "--prov", str(input_file), str(output_file)],
+            )
+
+        assert exc_info.value.code == 4
+        crate_path = tmp_path / "ro-crate-metadata.json"
+        assert crate_path.exists()
+        assert output_file.read_text() == "DATA"
+        graph = {e["@id"]: e for e in json.loads(crate_path.read_text())["@graph"]}
+
+        action = next(e for e in graph.values() if e.get("@type") == "CreateAction")
+        expected_action_id = f"process --prov {input_file} {output_file}"
+        assert action["@id"] == expected_action_id
+        assert action["name"] == expected_action_id
+        input_ids = {o["@id"] for o in action.get("object", [])}
+        output_ids = {r["@id"] for r in action.get("result", [])}
+        assert "input.txt" in input_ids
+        assert "output.txt" in output_ids
+
+    def test_subcommand_with_trigger_in_dataclass_on(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        monkeypatch.chdir(tmp_path)
+        input_file = tmp_path / "input.txt"
+        input_file.write_text("data")
+        output_file = tmp_path / "output.txt"
+
+        @Parameter(name="*")
+        @dataclass
+        class Common:
+            prov: Annotated[bool, RECORD_TRIGGER] = False
+
+        app = App(name="myapp")
+
+        @app.command
+        def process(
+            input: Annotated[Path, INPUT_FILE],
+            output: Annotated[Path, OUTPUT_FILE],
+            *,
+            common: Common | None = None,
+        ):
+            "Process files."
+            print(common)
+            output.write_text(input.read_text().upper())
+            return output.stat().st_size
+
+        with pytest.raises(SystemExit) as exc_info:
+            run_with_record(
+                app,
+                dataset_license="CC-BY-4.0",
+                tokens=["process", "--prov", str(input_file), str(output_file)],
+            )
+
+        assert exc_info.value.code == 4
+        crate_path = tmp_path / "ro-crate-metadata.json"
+        assert crate_path.exists()
+
+    def test_subcommand_with_trigger_in_dataclass_off(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        monkeypatch.chdir(tmp_path)
+        input_file = tmp_path / "input.txt"
+        input_file.write_text("data")
+        output_file = tmp_path / "output.txt"
+
+        @Parameter(name="*")
+        @dataclass
+        class Common:
+            prov: Annotated[bool, RECORD_TRIGGER] = False
+
+        app = App(name="myapp")
+
+        @app.command
+        def process(
+            input: Annotated[Path, INPUT_FILE],
+            output: Annotated[Path, OUTPUT_FILE],
+            *,
+            common: Common | None = None,
+        ):
+            "Process files."
+            print(common)
+            output.write_text(input.read_text().upper())
+            return output.stat().st_size
+
+        with pytest.raises(SystemExit) as exc_info:
+            run_with_record(
+                app,
+                dataset_license="CC-BY-4.0",
+                tokens=["process", str(input_file), str(output_file)],
+            )
+
+        assert exc_info.value.code == 4
+        crate_path = tmp_path / "ro-crate-metadata.json"
+        assert not crate_path.exists()
 
 
 class Test_cyclopts_value2paths:

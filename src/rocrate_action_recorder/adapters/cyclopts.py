@@ -1,6 +1,7 @@
 """Adapter for Cyclopts CLI framework."""
 
 from datetime import UTC, datetime
+from dataclasses import is_dataclass
 from pathlib import Path
 from typing import Any, LiteralString
 import logging
@@ -56,9 +57,7 @@ _MARKER_TO_CATEGORY: dict[str, str] = {
 }
 
 
-def program_from_app(
-    app: App
-) -> Program:
+def program_from_app(app: App) -> Program:
     """Extract Program information from a Cyclopts App.
 
     Args:
@@ -78,15 +77,18 @@ def program_from_app(
     if cmd:
         description = getattr(cmd, "__doc__", "") or ""
 
+    parent_name = (
+        " ".join(app.name) if isinstance(app.name, tuple) else (app.name or "")
+    )
     program = Program(
-        name=" ".join(app.name) if isinstance(app.name, tuple) else (app.name or ""),
+        name=parent_name,
         description=description,
         version=version,
     )
 
     subcommands_dict: dict[str, Program] = {}
     for sub_app in app.subapps:
-        if sub_app.default_command:
+        if sub_app.default_command and inspect.isfunction(sub_app.default_command):
             cmd = sub_app.default_command
             cmd_name = getattr(cmd, "__name__", "")
             subversion = None
@@ -96,8 +98,9 @@ def program_from_app(
                 )
                 if subversion_str is not None:
                     subversion = str(subversion_str)
+            full_name = f"{parent_name} {cmd_name}".strip() if parent_name else cmd_name
             subprogram = Program(
-                name=cmd_name,
+                name=full_name,
                 description=getattr(cmd, "__doc__", "") or "",
                 version=subversion,
             )
@@ -108,21 +111,76 @@ def program_from_app(
     return program
 
 
+def _lookup_argument_value(arguments: dict[str, Any], field_name: str) -> Any | None:
+    """Resolve an argument value from Cyclopts bound arguments.
+
+    Cyclopts stores grouped parameters, such as dataclass-backed option groups,
+    under their parent parameter name in ``bound_args.arguments``. This helper
+    resolves both top-level and nested field values.
+
+    Args:
+        arguments: Parsed Cyclopts bound arguments.
+        field_name: Field name to resolve.
+
+    Returns:
+        The resolved value, or None if the field cannot be found.
+    """
+    if field_name in arguments:
+        return arguments[field_name]
+
+    def search(value: Any) -> Any | None:
+        if value is None:
+            return None
+
+        if isinstance(value, dict):
+            if field_name in value:
+                return value[field_name]
+            for nested_value in value.values():
+                resolved = search(nested_value)
+                if resolved is not None:
+                    return resolved
+            return None
+
+        if is_dataclass(value):
+            if hasattr(value, field_name):
+                return getattr(value, field_name)
+            for nested_name in value.__dataclass_fields__:
+                resolved = search(getattr(value, nested_name))
+                if resolved is not None:
+                    return resolved
+            return None
+
+        if hasattr(value, field_name):
+            return getattr(value, field_name)
+
+        return None
+
+    for argument_value in arguments.values():
+        resolved = search(argument_value)
+        if resolved is not None:
+            return resolved
+
+    return None
+
+
 def collect_record_info_from_cyclopts(
     app: App,
     bound_args: inspect.BoundArguments,
     ios: IOArgumentNames,
     argument_collection: ArgumentCollection,
     software_version: str | None = None,
+    executed_app: App | None = None,
 ) -> tuple[Program, IOArgumentPaths]:
     """Collect Program and IOArgumentPaths from Cyclopts inputs.
 
     Args:
-        app: Current Cyclopts App instance.
+        app: Root Cyclopts App instance.
         bound_args: Parsed Cyclopts bound arguments.
         ios: Parameter names that map to input/output files and directories.
-        argument_collection: Assembled Cyclopts argument collection.
+        argument_collection: Assembled Cyclopts argument collection (from the executed subapp).
         software_version: Optional program version override.
+        executed_app: Leaf App that was actually invoked; if provided, it is used for future
+            program-name construction in nested subcommand scenarios.
 
     Returns:
         A tuple of (Program, IOArgumentPaths).
@@ -136,21 +194,37 @@ def collect_record_info_from_cyclopts(
         name = arg.name.lstrip("-")
         field_name = arg.field_info.names[0]
         ann = arg.field_info.annotation
-        help_text = str(ann.__metadata__[0]) if hasattr(ann, "__metadata__") and ann.__metadata__ else ""
+        help_text = (
+            str(ann.__metadata__[0])
+            if hasattr(ann, "__metadata__") and ann.__metadata__
+            else ""
+        )
         name_info[name] = (field_name, help_text)
 
     def resolve(names: list[str]) -> list[IOArgumentPath]:
         result: list[IOArgumentPath] = []
         for name in names:
             info = name_info.get(name)
-            if info is None or info[0] not in bound_args.arguments:
-                logger.warning(f"Argument name '{name}' does not exist in parsed Cyclopts args.")
+            if info is None:
+                logger.warning(
+                    f"Argument name '{name}' does not exist in parsed Cyclopts args."
+                )
                 continue
             field_name, help_text = info
-            paths = cyclopts_value2paths(bound_args.arguments[field_name])
+            value = _lookup_argument_value(bound_args.arguments, field_name)
+            if value is None:
+                logger.warning(
+                    f"Argument name '{name}' does not exist in parsed Cyclopts args."
+                )
+                continue
+            paths = cyclopts_value2paths(value)
             if not paths:
-                logger.warning(f"Argument name '{name}' has no associated path-like argument value(s).")
-            result.extend(IOArgumentPath(name=name, path=p, help=help_text) for p in paths)
+                logger.warning(
+                    f"Argument name '{name}' has no associated path-like argument value(s)."
+                )
+            result.extend(
+                IOArgumentPath(name=name, path=p, help=help_text) for p in paths
+            )
         return result
 
     ioargs = IOArgumentPaths(
@@ -174,6 +248,7 @@ def record_cyclopts(
     current_user: str | None = None,
     software_version: str | None = None,
     dataset_license: str | None = None,
+    executed_app: App | None = None,
 ) -> Path:
     """Record a CLI invocation in an RO-Crate using Cyclopts.
 
@@ -184,10 +259,10 @@ def record_cyclopts(
         to parameter names `input` and `output`.
 
     Args:
-        app: Current Cyclopts App instance.
+        app: Root Cyclopts App instance.
         bound_args: Parsed Cyclopts bound arguments.
         ios: Parameter names that map to input/output files and directories.
-        argument_collection: Assembled Cyclopts argument collection.
+        argument_collection: Assembled Cyclopts argument collection (from the executed subapp).
         start_time: Datetime when the action started.
         crate_dir: Optional path to RO-Crate directory.
         argv: Optional command arguments to use in action id.
@@ -195,6 +270,7 @@ def record_cyclopts(
         current_user: Optional user override.
         software_version: Optional software version override.
         dataset_license: Optional dataset license string.
+        executed_app: Leaf App that was actually invoked.
 
     Returns:
         Path to generated ro-crate-metadata.json.
@@ -205,6 +281,7 @@ def record_cyclopts(
         ios,
         argument_collection,
         software_version=software_version,
+        executed_app=executed_app,
     )
     return record(
         program=program,
@@ -271,7 +348,7 @@ def _should_record(
     if record_trigger_name is None:
         return True
 
-    trigger_value = bound_args.arguments.get(record_trigger_name)
+    trigger_value = _lookup_argument_value(bound_args.arguments, record_trigger_name)
     if trigger_value is None:
         return False
 
@@ -298,10 +375,8 @@ def run_with_record(
         **kwargs: Keyword arguments passed to :meth:`cyclopts.App.__call__`.
 
     Raises:
-        ValueError: If no arguments with INPUT/OUTPUT markers are found.
+        ValueError: If no arguments with INPUT/OUTPUT markers are found on the executed command.
     """
-    argument_collection = app.assemble_argument_collection()
-    ios, record_trigger_name = _detect_ios_and_trigger(argument_collection)
 
     def patched_call(self: App, *args: Any, **kwargs: Any):
         start_time = datetime.now(tz=UTC)
@@ -314,7 +389,13 @@ def run_with_record(
         elif hasattr(argv, "__iter__") and not isinstance(argv, list):
             argv = list(argv)
 
-        _, bound_args, _ = self.parse_args(argv)
+        command, bound_args, _ = self.parse_args(argv)
+        executed_app = next(
+            (sub for sub in self.subapps if sub.default_command is command),
+            self,
+        )
+        argument_collection = executed_app.assemble_argument_collection()
+        ios, record_trigger_name = _detect_ios_and_trigger(argument_collection)
 
         try:
             result = _ORIGINAL_CYCLOPTS_APP_CALL(self, *args, **kwargs)
@@ -326,6 +407,7 @@ def run_with_record(
         if _should_record(bound_args, record_trigger_name):
             record_cyclopts(
                 app=self,
+                executed_app=executed_app,
                 bound_args=bound_args,
                 ios=ios,
                 argument_collection=argument_collection,

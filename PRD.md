@@ -7,7 +7,7 @@
 
 ## Tasks
 
-- [ ] Task 1 — Single-level subcommand recording
+- [x] Task 1 — Single-level subcommand recording
 - [ ] Task 2 — Nested subcommand recording
 - [ ] Task 3 — `list[Path]` / `tuple[Path, ...]` multi-value arguments
 - [ ] Task 4 — File-like objects with `.name`
