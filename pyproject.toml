@@ -29,6 +29,7 @@ classifiers = [
 click = [
   "click>=8.1.0",
 ]
+cyclopts = ["cyclopts>=4.10.1"]
 
 [build-system]
 requires = ["hatchling"]
