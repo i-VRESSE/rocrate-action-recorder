@@ -355,6 +355,27 @@ def _should_record(
     return bool(trigger_value)
 
 
+def _resolve_executed_subapp(app: App, command: Any) -> App | None:
+    """Find the app node that owns the executed default command.
+
+    Args:
+        app: App node to inspect.
+        command: Resolved callable returned by ``parse_args``.
+
+    Returns:
+        Matching app instance, or None when no match is found.
+    """
+    if app.default_command is command:
+        return app
+
+    for subapp in app.subapps:
+        resolved = _resolve_executed_subapp(subapp, command)
+        if resolved is not None:
+            return resolved
+
+    return None
+
+
 def run_with_record(
     app: App,
     crate_dir: Path | None = None,
@@ -390,10 +411,7 @@ def run_with_record(
             argv = list(argv)
 
         command, bound_args, _ = self.parse_args(argv)
-        executed_app = next(
-            (sub for sub in self.subapps if sub.default_command is command),
-            self,
-        )
+        executed_app = _resolve_executed_subapp(self, command) or self
         argument_collection = executed_app.assemble_argument_collection()
         ios, record_trigger_name = _detect_ios_and_trigger(argument_collection)
 
