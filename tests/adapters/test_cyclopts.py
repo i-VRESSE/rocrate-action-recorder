@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 from typing import Annotated, Any, cast
 
+import cyclopts
 import pytest
 
 from cyclopts import App, Parameter
@@ -404,6 +405,47 @@ class TestRunWithRecord:
                 in caplog.text
             )
             assert "has no associated path-like argument value(s)." in caplog.text
+
+        def test_nonexistent_output_path_in_admin_grouped_commands(
+            self,
+            working_tmp_path: Path,
+            capsys: pytest.CaptureFixture[str],
+        ):
+            output_file = working_tmp_path / "downloaded.txt"
+            url = "https://example.org/resource.txt"
+
+            app = App(result_action="return_value", version="1.0.0")
+
+            # Move built-in meta commands into the same command group as "info".
+            app["--help"].group = "Admin"
+            app["--version"].group = "Admin"
+
+            @app.command(group="Admin")
+            def info():
+                """Print debugging system information."""
+                print("Displaying system info.")
+
+            @app.command
+            def download(
+                path: Annotated[cyclopts.types.NonExistentPath, OUTPUT_FILE],
+                url: str,
+            ):
+                """Download a file."""
+                path.write_text(f"fetched from {url}\n")
+                print(f"Downloading {url} to {path}.")
+
+            result = run_with_record(
+                app,
+                dataset_license="CC-BY-4.0",
+                tokens=["download", str(output_file), url],
+            )
+
+            assert result is None
+            assert f"Downloading {url} to {output_file}." in capsys.readouterr().out
+            assert_crate(
+                working_tmp_path,
+                expected_output_ids={"downloaded.txt"},
+            )
 
     class TestResultAction:
         def test_return_value(self, working_tmp_path: Path):
