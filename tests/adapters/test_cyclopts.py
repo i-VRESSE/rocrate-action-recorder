@@ -7,6 +7,7 @@ import pytest
 import rocrate_action_recorder.adapters.cyclopts as cyclopts_adapter
 
 from cyclopts import App, Parameter
+from cyclopts.types import StdioPath
 from rocrate_action_recorder.adapters.cyclopts import (
     INPUT_FILE,
     OUTPUT_FILE,
@@ -127,6 +128,51 @@ class TestRunWithRecord:
             run_with_record(app, tokens=[])
 
         assert captured["detect"] == captured["record"]
+
+    def test_stdiopath_dash_not_recorded(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+    ):
+        monkeypatch.chdir(tmp_path)
+
+        output_file = tmp_path / "output.txt"
+
+        app = App(version="1.0.0")
+
+        @app.default
+        def myfunc(
+            input: Annotated[StdioPath, INPUT_FILE],
+            output: Annotated[Path, OUTPUT_FILE],
+        ):
+            return output.write_text("from stdin")
+
+        with pytest.raises(SystemExit) as exc_info:
+            run_with_record(
+                app,
+                dataset_license="CC-BY-4.0",
+                tokens=["-", str(output_file)],
+            )
+
+        assert exc_info.value.code == 10
+        assert output_file.read_text() == "from stdin"
+
+        crate_path = tmp_path / "ro-crate-metadata.json"
+        assert crate_path.exists()
+
+        graph = {e["@id"]: e for e in json.loads(crate_path.read_text())["@graph"]}
+        action = next(e for e in graph.values() if e.get("@type") == "CreateAction")
+        input_ids = {o["@id"] for o in action.get("object", [])}
+        output_ids = {r["@id"] for r in action.get("result", [])}
+
+        assert "-" not in input_ids
+        assert "output.txt" in output_ids
+        assert (
+            "Unable to convert stdin/stdout file-like object to Path, ignoring it"
+            in caplog.text
+        )
+        assert "has no associated path-like argument value(s)." in caplog.text
 
 
 class TestRunWithRecordSingleLevelSubcommand:
@@ -503,5 +549,21 @@ class Test_cyclopts_value2paths:
         path.write_text("test")
 
         paths = cyclopts_value2paths([path, path])
+
+        assert paths == [path]
+
+    def test_stdiopath_dash_ignored(self, caplog: pytest.LogCaptureFixture):
+        paths = cyclopts_value2paths(StdioPath("-"))
+
+        assert paths == []
+        assert (
+            "Unable to convert stdin/stdout file-like object to Path, ignoring it"
+            in caplog.text
+        )
+
+    def test_mixed_paths_with_stdiopath_dash(self, tmp_path: Path):
+        path = tmp_path / "input.txt"
+
+        paths = cyclopts_value2paths([path, StdioPath("-")])
 
         assert paths == [path]

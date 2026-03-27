@@ -24,19 +24,20 @@ class IOArgumentNames:
 
 def try_convert_to_path(item: Any) -> Path | None:
     """Try to convert a single item to a Path."""
+    if hasattr(item, "name") and (
+        item.name is None
+        or item.name == "<stdin>"
+        or item.name == "<stdout>"
+        or item.name == "-"
+    ):
+        logger.warning(
+            "Unable to convert stdin/stdout file-like object to Path, ignoring it"
+        )
+        return None
+
     if isinstance(item, Path):
         return item
     if hasattr(item, "name"):
-        if (
-            item.name is None
-            or item.name == "<stdin>"
-            or item.name == "<stdout>"
-            or item.name == "-"
-        ):
-            logger.warning(
-                "Unable to convert stdin/stdout file-like object to Path, ignoring it"
-            )
-            return None
         return Path(item.name)
     if item is None:
         logger.warning("Unable to convert None to Path, ignoring it")
