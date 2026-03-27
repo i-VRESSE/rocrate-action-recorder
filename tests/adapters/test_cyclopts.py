@@ -8,8 +8,12 @@ import pytest
 from cyclopts import App, Parameter
 from cyclopts.types import StdioPath
 from rocrate_action_recorder.adapters.cyclopts import (
+    INPUT_DIR,
+    INPUT_DIRS,
     INPUT_FILE,
     INPUT_FILES,
+    OUTPUT_DIR,
+    OUTPUT_DIRS,
     OUTPUT_FILE,
     OUTPUT_FILES,
     RECORD_TRIGGER,
@@ -64,16 +68,18 @@ def assert_crate(
     return graph
 
 
+@pytest.fixture
+def working_tmp_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    monkeypatch.chdir(tmp_path)
+    return tmp_path
+
+
 class TestRunWithRecord:
     class TestMarkers:
-        def test_single_input_output_file(
-            self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-        ):
-            monkeypatch.chdir(tmp_path)
-
-            input_file = tmp_path / "input.txt"
+        def test_single_input_output_file(self, working_tmp_path: Path):
+            input_file = working_tmp_path / "input.txt"
             input_file.write_text("hello")
-            output_file = tmp_path / "output.txt"
+            output_file = working_tmp_path / "output.txt"
 
             app = App(result_action="return_value", version="1.0.0")
 
@@ -92,19 +98,15 @@ class TestRunWithRecord:
 
             assert result == 5
             assert output_file.read_text() == "HELLO"
-            crate_path = tmp_path / "ro-crate-metadata.json"
+            crate_path = working_tmp_path / "ro-crate-metadata.json"
             assert crate_path.exists()
 
-        def test_multiple_input_files(
-            self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-        ):
-            monkeypatch.chdir(tmp_path)
-
-            input_file_1 = tmp_path / "input1.txt"
-            input_file_2 = tmp_path / "input2.txt"
+        def test_multiple_input_files(self, working_tmp_path: Path):
+            input_file_1 = working_tmp_path / "input1.txt"
+            input_file_2 = working_tmp_path / "input2.txt"
             input_file_1.write_text("hello")
             input_file_2.write_text("world")
-            output_file = tmp_path / "output.txt"
+            output_file = working_tmp_path / "output.txt"
 
             app = App(result_action="return_value", version="1.0.0")
 
@@ -133,19 +135,15 @@ class TestRunWithRecord:
             assert result == 11
             assert output_file.read_text() == "HELLO\nWORLD"
             assert_crate(
-                tmp_path,
+                working_tmp_path,
                 expected_input_ids={"input1.txt", "input2.txt"},
             )
 
-        def test_multiple_output_files(
-            self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-        ):
-            monkeypatch.chdir(tmp_path)
-
-            input_file = tmp_path / "input.txt"
+        def test_multiple_output_files(self, working_tmp_path: Path):
+            input_file = working_tmp_path / "input.txt"
             input_file.write_text("hello")
-            output_file_1 = tmp_path / "output1.txt"
-            output_file_2 = tmp_path / "output2.txt"
+            output_file_1 = working_tmp_path / "output1.txt"
+            output_file_2 = working_tmp_path / "output2.txt"
 
             app = App(result_action="return_value", version="1.0.0")
 
@@ -175,17 +173,133 @@ class TestRunWithRecord:
             assert output_file_1.read_text() == "HELLO"
             assert output_file_2.read_text() == "HELLO"
             assert_crate(
-                tmp_path,
+                working_tmp_path,
                 expected_output_ids={"output1.txt", "output2.txt"},
+            )
+
+        def test_single_input_output_dir(self, working_tmp_path: Path):
+            input_dir = working_tmp_path / "input"
+            input_dir.mkdir()
+            (input_dir / "a.txt").write_text("hello")
+            output_dir = working_tmp_path / "output"
+
+            app = App(result_action="return_value", version="1.0.0")
+
+            @app.default
+            def myfunc(
+                input_dir_arg: Annotated[Path, INPUT_DIR],
+                output_dir_arg: Annotated[Path, OUTPUT_DIR],
+            ):
+                output_dir_arg.mkdir()
+                content = (input_dir_arg / "a.txt").read_text().upper()
+                return (output_dir_arg / "a.txt").write_text(content)
+
+            result = run_with_record(
+                app,
+                dataset_license="CC-BY-4.0",
+                tokens=[str(input_dir), str(output_dir)],
+            )
+
+            assert result == 5
+            assert (output_dir / "a.txt").read_text() == "HELLO"
+            assert_crate(
+                working_tmp_path,
+                expected_input_ids={"input/"},
+                expected_output_ids={"output/"},
+            )
+
+        def test_multiple_input_dirs(self, working_tmp_path: Path):
+            input_dir_1 = working_tmp_path / "input1"
+            input_dir_2 = working_tmp_path / "input2"
+            input_dir_1.mkdir()
+            input_dir_2.mkdir()
+            (input_dir_1 / "a.txt").write_text("hello")
+            (input_dir_2 / "b.txt").write_text("world")
+            output_file = working_tmp_path / "output.txt"
+
+            app = App(result_action="return_value", version="1.0.0")
+
+            @app.default
+            def myfunc(
+                *,
+                input_dirs: Annotated[list[Path], INPUT_DIRS],
+                output: Annotated[Path, OUTPUT_FILE],
+            ):
+                combined = "\n".join(
+                    sorted(
+                        (path / next(path.iterdir()).name).read_text().upper()
+                        for path in input_dirs
+                    )
+                )
+                return output.write_text(combined)
+
+            result = run_with_record(
+                app,
+                dataset_license="CC-BY-4.0",
+                tokens=[
+                    "--input-dirs",
+                    str(input_dir_1),
+                    "--input-dirs",
+                    str(input_dir_2),
+                    "--output",
+                    str(output_file),
+                ],
+            )
+
+            assert result == 11
+            assert output_file.read_text() == "HELLO\nWORLD"
+            assert_crate(
+                working_tmp_path,
+                expected_input_ids={"input1/", "input2/"},
+                expected_output_ids={"output.txt"},
+            )
+
+        def test_multiple_output_dirs(self, working_tmp_path: Path):
+            input_file = working_tmp_path / "input.txt"
+            input_file.write_text("hello")
+            output_dir_1 = working_tmp_path / "output1"
+            output_dir_2 = working_tmp_path / "output2"
+
+            app = App(result_action="return_value", version="1.0.0")
+
+            @app.default
+            def myfunc(
+                *,
+                input: Annotated[Path, INPUT_FILE],
+                output_dirs: Annotated[list[Path], OUTPUT_DIRS],
+            ):
+                data = input.read_text().upper()
+                total = 0
+                for output_dir in output_dirs:
+                    output_dir.mkdir()
+                    total += (output_dir / "result.txt").write_text(data)
+                return total
+
+            result = run_with_record(
+                app,
+                dataset_license="CC-BY-4.0",
+                tokens=[
+                    "--input",
+                    str(input_file),
+                    "--output-dirs",
+                    str(output_dir_1),
+                    "--output-dirs",
+                    str(output_dir_2),
+                ],
+            )
+
+            assert result == 10
+            assert (output_dir_1 / "result.txt").read_text() == "HELLO"
+            assert (output_dir_2 / "result.txt").read_text() == "HELLO"
+            assert_crate(
+                working_tmp_path,
+                expected_output_ids={"output1/", "output2/"},
+                expected_input_ids={"input.txt"},
             )
 
     class TestRecordTrigger:
         @pytest.fixture
-        def app_with_record_trigger(
-            self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-        ):
-            monkeypatch.chdir(tmp_path)
-
+        def app_with_record_trigger(self, working_tmp_path: Path):
             app = App(result_action="return_value", version="1.0.0")
 
             @app.default
@@ -201,11 +315,11 @@ class TestRunWithRecord:
             return app
 
         def test_record_trigger_default_off(
-            self, tmp_path: Path, app_with_record_trigger: App
+            self, working_tmp_path: Path, app_with_record_trigger: App
         ):
-            input_file = tmp_path / "input.txt"
+            input_file = working_tmp_path / "input.txt"
             input_file.write_text("hello")
-            output_file = tmp_path / "output.txt"
+            output_file = working_tmp_path / "output.txt"
 
             result = run_with_record(
                 app_with_record_trigger,
@@ -215,12 +329,14 @@ class TestRunWithRecord:
 
             assert result == 5
             assert output_file.read_text() == "HELLO"
-            assert not (tmp_path / "ro-crate-metadata.json").exists()
+            assert not (working_tmp_path / "ro-crate-metadata.json").exists()
 
-        def test_record_trigger_on(self, tmp_path: Path, app_with_record_trigger: App):
-            input_file = tmp_path / "input.txt"
+        def test_record_trigger_on(
+            self, working_tmp_path: Path, app_with_record_trigger: App
+        ):
+            input_file = working_tmp_path / "input.txt"
             input_file.write_text("hello")
-            output_file = tmp_path / "output.txt"
+            output_file = working_tmp_path / "output.txt"
 
             result = run_with_record(
                 app_with_record_trigger,
@@ -230,18 +346,36 @@ class TestRunWithRecord:
 
             assert result == 5
             assert output_file.read_text() == "HELLO"
-            assert (tmp_path / "ro-crate-metadata.json").exists()
+            assert (working_tmp_path / "ro-crate-metadata.json").exists()
+
+        def test_no_io_markers_raises_value_error(self, working_tmp_path: Path):
+            input_file = working_tmp_path / "input.txt"
+            input_file.write_text("hello")
+            output_file = working_tmp_path / "output.txt"
+
+            app = App(result_action="return_value", version="1.0.0")
+
+            @app.default
+            def myfunc(
+                input: Path,
+                output: Path,
+            ):
+                return output.write_text(input.read_text().upper())
+
+            with pytest.raises(ValueError, match="No arguments with INPUT_FILE"):
+                run_with_record(
+                    app,
+                    dataset_license="CC-BY-4.0",
+                    tokens=[str(input_file), str(output_file)],
+                )
 
     class TestTypes:
         def test_stdiopath_dash_not_recorded(
             self,
-            tmp_path: Path,
-            monkeypatch: pytest.MonkeyPatch,
+            working_tmp_path: Path,
             caplog: pytest.LogCaptureFixture,
         ):
-            monkeypatch.chdir(tmp_path)
-
-            output_file = tmp_path / "output.txt"
+            output_file = working_tmp_path / "output.txt"
 
             app = App(result_action="return_value", version="1.0.0")
 
@@ -261,7 +395,7 @@ class TestRunWithRecord:
             assert result == 10
             assert output_file.read_text() == "from stdin"
             assert_crate(
-                tmp_path,
+                working_tmp_path,
                 expected_output_ids={"output.txt"},
                 excluded_input_ids={"-"},
             )
@@ -272,12 +406,10 @@ class TestRunWithRecord:
             assert "has no associated path-like argument value(s)." in caplog.text
 
     class TestResultAction:
-        def test_return_value(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-            monkeypatch.chdir(tmp_path)
-
-            input_file = tmp_path / "input.txt"
+        def test_return_value(self, working_tmp_path: Path):
+            input_file = working_tmp_path / "input.txt"
             input_file.write_text("hello")
-            output_file = tmp_path / "output.txt"
+            output_file = working_tmp_path / "output.txt"
 
             app = App(result_action="return_value", version="1.0.0")
 
@@ -297,19 +429,15 @@ class TestRunWithRecord:
             assert result == 5
             assert output_file.read_text() == "HELLO"
             assert_crate(
-                tmp_path,
+                working_tmp_path,
                 expected_input_ids={"input.txt"},
                 expected_output_ids={"output.txt"},
             )
 
-        def test_print_non_int_return_int_as_exit_code(
-            self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-        ):
-            monkeypatch.chdir(tmp_path)
-
-            input_file = tmp_path / "input.txt"
+        def test_print_non_int_return_int_as_exit_code(self, working_tmp_path: Path):
+            input_file = working_tmp_path / "input.txt"
             input_file.write_text("hello")
-            output_file = tmp_path / "output.txt"
+            output_file = working_tmp_path / "output.txt"
 
             app = App(
                 result_action="print_non_int_return_int_as_exit_code", version="1.0.0"
@@ -332,19 +460,15 @@ class TestRunWithRecord:
             assert result == 0
             assert output_file.read_text() == "HELLO"
             assert_crate(
-                tmp_path,
+                working_tmp_path,
                 expected_input_ids={"input.txt"},
                 expected_output_ids={"output.txt"},
             )
 
-        def test_default_sys_exit(
-            self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-        ):
-            monkeypatch.chdir(tmp_path)
-
-            input_file = tmp_path / "input.txt"
+        def test_default_sys_exit(self, working_tmp_path: Path):
+            input_file = working_tmp_path / "input.txt"
             input_file.write_text("hello")
-            output_file = tmp_path / "output.txt"
+            output_file = working_tmp_path / "output.txt"
 
             app = App(result_action="return_value", version="1.0.0")
 
@@ -364,19 +488,15 @@ class TestRunWithRecord:
             assert result == 5
             assert output_file.read_text() == "HELLO"
             assert_crate(
-                tmp_path,
+                working_tmp_path,
                 expected_input_ids={"input.txt"},
                 expected_output_ids={"output.txt"},
             )
 
-        def test_print_non_int_sys_exit(
-            self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-        ):
-            monkeypatch.chdir(tmp_path)
-
-            input_file = tmp_path / "input.txt"
+        def test_print_non_int_sys_exit(self, working_tmp_path: Path):
+            input_file = working_tmp_path / "input.txt"
             input_file.write_text("hello")
-            output_file = tmp_path / "output.txt"
+            output_file = working_tmp_path / "output.txt"
 
             app = App(result_action="print_non_int_sys_exit", version="1.0.0")
 
@@ -397,19 +517,16 @@ class TestRunWithRecord:
             assert exc_info.value.code == 5
             assert output_file.read_text() == "HELLO"
             assert_crate(
-                tmp_path,
+                working_tmp_path,
                 expected_input_ids={"input.txt"},
                 expected_output_ids={"output.txt"},
             )
 
     class TestSingleLevelSubcommand:
-        def test_subcommand_single_level(
-            self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-        ):
-            monkeypatch.chdir(tmp_path)
-            input_file = tmp_path / "input.txt"
+        def test_subcommand_single_level(self, working_tmp_path: Path):
+            input_file = working_tmp_path / "input.txt"
             input_file.write_text("data")
-            output_file = tmp_path / "output.txt"
+            output_file = working_tmp_path / "output.txt"
 
             app = App(name="myapp", result_action="return_value")
 
@@ -421,11 +538,6 @@ class TestRunWithRecord:
                 "Process files."
                 output.write_text(input.read_text().upper())
 
-            @app.command
-            def validate(schema: Annotated[Path, INPUT_FILE]):
-                "Validate files."
-                pass
-
             run_with_record(
                 app,
                 dataset_license="CC-BY-4.0",
@@ -434,20 +546,17 @@ class TestRunWithRecord:
 
             expected_action_id = f"process {input_file} {output_file}"
             graph = assert_crate(
-                tmp_path,
+                working_tmp_path,
                 expected_action_id=expected_action_id,
                 expected_input_ids={"input.txt"},
                 expected_output_ids={"output.txt"},
             )
             assert not any("schema" in eid for eid in graph)
 
-        def test_subcommand_with_trigger(
-            self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-        ):
-            monkeypatch.chdir(tmp_path)
-            input_file = tmp_path / "input.txt"
+        def test_subcommand_with_trigger(self, working_tmp_path: Path):
+            input_file = working_tmp_path / "input.txt"
             input_file.write_text("data")
-            output_file = tmp_path / "output.txt"
+            output_file = working_tmp_path / "output.txt"
 
             app = App(name="myapp", result_action="return_value")
 
@@ -472,7 +581,7 @@ class TestRunWithRecord:
             assert output_file.read_text() == "DATA"
             expected_action_id = f"process --prov {input_file} {output_file}"
             assert_crate(
-                tmp_path,
+                working_tmp_path,
                 expected_action_id=expected_action_id,
                 expected_input_ids={"input.txt"},
                 expected_output_ids={"output.txt"},
@@ -480,13 +589,11 @@ class TestRunWithRecord:
 
         def test_subcommand_with_trigger_in_dataclass_on(
             self,
-            tmp_path: Path,
-            monkeypatch: pytest.MonkeyPatch,
+            working_tmp_path: Path,
         ):
-            monkeypatch.chdir(tmp_path)
-            input_file = tmp_path / "input.txt"
+            input_file = working_tmp_path / "input.txt"
             input_file.write_text("data")
-            output_file = tmp_path / "output.txt"
+            output_file = working_tmp_path / "output.txt"
 
             @Parameter(name="*")
             @dataclass
@@ -503,7 +610,6 @@ class TestRunWithRecord:
                 common: Common | None = None,
             ):
                 "Process files."
-                print(common)
                 output.write_text(input.read_text().upper())
                 return output.stat().st_size
 
@@ -514,18 +620,16 @@ class TestRunWithRecord:
             )
 
             assert result == 4
-            crate_path = tmp_path / "ro-crate-metadata.json"
+            crate_path = working_tmp_path / "ro-crate-metadata.json"
             assert crate_path.exists()
 
         def test_subcommand_with_trigger_in_dataclass_off(
             self,
-            tmp_path: Path,
-            monkeypatch: pytest.MonkeyPatch,
+            working_tmp_path: Path,
         ):
-            monkeypatch.chdir(tmp_path)
-            input_file = tmp_path / "input.txt"
+            input_file = working_tmp_path / "input.txt"
             input_file.write_text("data")
-            output_file = tmp_path / "output.txt"
+            output_file = working_tmp_path / "output.txt"
 
             @Parameter(name="*")
             @dataclass
@@ -542,7 +646,6 @@ class TestRunWithRecord:
                 common: Common | None = None,
             ):
                 "Process files."
-                print(common)
                 output.write_text(input.read_text().upper())
                 return output.stat().st_size
 
@@ -553,17 +656,14 @@ class TestRunWithRecord:
             )
 
             assert result == 4
-            crate_path = tmp_path / "ro-crate-metadata.json"
+            crate_path = working_tmp_path / "ro-crate-metadata.json"
             assert not crate_path.exists()
 
     class TestTwoLevelSubcommand:
-        def test_subcommand_two_levels(
-            self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-        ):
-            monkeypatch.chdir(tmp_path)
-            input_file = tmp_path / "input.txt"
+        def test_subcommand_two_levels(self, working_tmp_path: Path):
+            input_file = working_tmp_path / "input.txt"
             input_file.write_text("data")
-            output_file = tmp_path / "output.txt"
+            output_file = working_tmp_path / "output.txt"
 
             app = App(name="myapp", result_action="return_value")
             remote = App(name="remote")
@@ -576,11 +676,6 @@ class TestRunWithRecord:
                 "Add a remote."
                 output.write_text(input.read_text().upper())
 
-            @remote.command
-            def remove(schema: Annotated[Path, INPUT_FILE]):
-                "Remove a remote."
-                pass
-
             app.command(remote)
 
             run_with_record(
@@ -591,20 +686,17 @@ class TestRunWithRecord:
 
             expected_action_id = f"remote add {input_file} {output_file}"
             graph = assert_crate(
-                tmp_path,
+                working_tmp_path,
                 expected_action_id=expected_action_id,
                 expected_input_ids={"input.txt"},
                 expected_output_ids={"output.txt"},
             )
             assert not any("schema" in eid for eid in graph)
 
-        def test_subcommand_two_levels_with_trigger(
-            self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-        ):
-            monkeypatch.chdir(tmp_path)
-            input_file = tmp_path / "input.txt"
+        def test_subcommand_two_levels_with_trigger(self, working_tmp_path: Path):
+            input_file = working_tmp_path / "input.txt"
             input_file.write_text("data")
-            output_file = tmp_path / "output.txt"
+            output_file = working_tmp_path / "output.txt"
 
             app = App(name="myapp", result_action="return_value")
             remote = App(name="remote")
@@ -632,7 +724,7 @@ class TestRunWithRecord:
             assert output_file.read_text() == "DATA"
             expected_action_id = f"remote add --prov {input_file} {output_file}"
             assert_crate(
-                tmp_path,
+                working_tmp_path,
                 expected_action_id=expected_action_id,
                 expected_input_ids={"input.txt"},
                 expected_output_ids={"output.txt"},
@@ -640,13 +732,11 @@ class TestRunWithRecord:
 
         def test_subcommand_two_levels_with_trigger_in_dataclass_on(
             self,
-            tmp_path: Path,
-            monkeypatch: pytest.MonkeyPatch,
+            working_tmp_path: Path,
         ):
-            monkeypatch.chdir(tmp_path)
-            input_file = tmp_path / "input.txt"
+            input_file = working_tmp_path / "input.txt"
             input_file.write_text("data")
-            output_file = tmp_path / "output.txt"
+            output_file = working_tmp_path / "output.txt"
 
             @Parameter(name="*")
             @dataclass
@@ -664,7 +754,6 @@ class TestRunWithRecord:
                 common: Common | None = None,
             ):
                 "Add a remote."
-                print(common)
                 output.write_text(input.read_text().upper())
                 return output.stat().st_size
 
@@ -677,18 +766,16 @@ class TestRunWithRecord:
             )
 
             assert result == 4
-            crate_path = tmp_path / "ro-crate-metadata.json"
+            crate_path = working_tmp_path / "ro-crate-metadata.json"
             assert crate_path.exists()
 
         def test_subcommand_two_levels_with_trigger_in_dataclass_off(
             self,
-            tmp_path: Path,
-            monkeypatch: pytest.MonkeyPatch,
+            working_tmp_path: Path,
         ):
-            monkeypatch.chdir(tmp_path)
-            input_file = tmp_path / "input.txt"
+            input_file = working_tmp_path / "input.txt"
             input_file.write_text("data")
-            output_file = tmp_path / "output.txt"
+            output_file = working_tmp_path / "output.txt"
 
             @Parameter(name="*")
             @dataclass
@@ -706,7 +793,6 @@ class TestRunWithRecord:
                 common: Common | None = None,
             ):
                 "Add a remote."
-                print(common)
                 output.write_text(input.read_text().upper())
                 return output.stat().st_size
 
@@ -719,7 +805,7 @@ class TestRunWithRecord:
             )
 
             assert result == 4
-            crate_path = tmp_path / "ro-crate-metadata.json"
+            crate_path = working_tmp_path / "ro-crate-metadata.json"
             assert not crate_path.exists()
 
 
