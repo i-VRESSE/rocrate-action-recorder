@@ -8,6 +8,7 @@ import inspect
 import sys
 
 from cyclopts import App
+from cyclopts.argument import ArgumentCollection
 
 from rocrate_action_recorder.core import (
     IOArgumentPath,
@@ -17,8 +18,7 @@ from rocrate_action_recorder.core import (
 )
 from rocrate_action_recorder.adapters.shared import (
     IOArgumentNames,
-    try_convert_to_path as shared_try_convert_to_path,
-    value2paths,
+    value2paths as cyclopts_value2paths,
 )
 
 logger = logging.getLogger(__name__)
@@ -44,60 +44,25 @@ RECORD_TRIGGER: LiteralString = "RECORD_TRIGGER"
 
 _ORIGINAL_CYCLOPTS_APP_CALL = App.__call__
 
-
-def cyclopts_help(
-    app: App, bound_args: inspect.BoundArguments, arg_name: str
-) -> str | None:
-    """Get help text for a Cyclopts parameter.
-
-    Args:
-        app: The Cyclopts App instance.
-        bound_args: The bound arguments from parsing.
-        arg_name: The parameter name.
-
-    Returns:
-        The help text if found, otherwise None.
-    """
-    argument_collection = app.assemble_argument_collection()
-    for arg in argument_collection:
-        if hasattr(arg, "name") and arg.name == arg_name:
-            if hasattr(arg, "field_info") and hasattr(arg.field_info, "annotation"):
-                annotation = arg.field_info.annotation
-                if hasattr(annotation, "__metadata__"):
-                    metadata = annotation.__metadata__
-                    if metadata:
-                        return str(metadata[0])
-    return None
-
-
-def cyclopts_value2paths(value: Any) -> list[Path]:
-    """Convert a Cyclopts parameter value to a list of Path objects.
-
-    Handles single paths, file-like objects, and tuples/lists of paths.
-    Deduplicates paths before returning.
-
-    Args:
-        value: A parsed Cyclopts parameter value.
-
-    Returns:
-        A list of deduplicated paths.
-    """
-    return value2paths(value)
-
-
-def try_convert_to_path(item: Any) -> Path | None:
-    """Try to convert a single item to a Path."""
-    return shared_try_convert_to_path(item)
+_MARKER_TO_CATEGORY: dict[str, str] = {
+    INPUT_FILE: "input_files",
+    INPUT_FILES: "input_files",
+    INPUT_DIR: "input_dirs",
+    INPUT_DIRS: "input_dirs",
+    OUTPUT_FILE: "output_files",
+    OUTPUT_FILES: "output_files",
+    OUTPUT_DIR: "output_dirs",
+    OUTPUT_DIRS: "output_dirs",
+}
 
 
 def program_from_app(
-    app: App, bound_args: inspect.BoundArguments | None = None
+    app: App
 ) -> Program:
     """Extract Program information from a Cyclopts App.
 
     Args:
         app: The Cyclopts App instance.
-        bound_args: Optional bound arguments for command-specific info.
 
     Returns:
         Program with command and selected subcommand information.
@@ -143,59 +108,11 @@ def program_from_app(
     return program
 
 
-def make_parameter2field(app: App) -> dict[str, str]:
-    param_to_field = {}
-    argument_collection = app.assemble_argument_collection()
-    for arg in argument_collection:
-        param_name = arg.parameter.name
-        if type(param_name) is tuple:
-            param_name = param_name[0]
-        field_name = arg.field_info.names[0]
-        param_to_field[param_name] = field_name
-    return param_to_field
-
-
-def map_name2paths(
-    app: App,
-    bound_args: inspect.BoundArguments,
-    name: str,
-) -> list[IOArgumentPath]:
-    """Map a single Cyclopts parameter name to IOArgumentPath entries."""
-    parameter2field = make_parameter2field(app)
-    field_name = parameter2field.get(name)
-
-    if field_name not in bound_args.arguments:
-        logger.warning(
-            f"Argument name '{name}' does not exist in parsed Cyclopts args."
-        )
-        return []
-
-    value = bound_args.arguments[field_name]
-    help_text = cyclopts_help(app, bound_args, name) or ""
-    paths = cyclopts_value2paths(value)
-    if not paths:
-        logger.warning(
-            f"Argument name '{name}' has no associated path-like argument value(s)."
-        )
-    return [IOArgumentPath(name=name, path=path, help=help_text) for path in paths]
-
-
-def map_names2paths(
-    app: App,
-    bound_args: inspect.BoundArguments,
-    names: list[str],
-) -> list[IOArgumentPath]:
-    """Map multiple Cyclopts parameter names to IOArgumentPath entries."""
-    ioargs: list[IOArgumentPath] = []
-    for name in names:
-        ioargs.extend(map_name2paths(app, bound_args, name))
-    return ioargs
-
-
 def collect_record_info_from_cyclopts(
     app: App,
     bound_args: inspect.BoundArguments,
     ios: IOArgumentNames,
+    argument_collection: ArgumentCollection,
     software_version: str | None = None,
 ) -> tuple[Program, IOArgumentPaths]:
     """Collect Program and IOArgumentPaths from Cyclopts inputs.
@@ -204,20 +121,43 @@ def collect_record_info_from_cyclopts(
         app: Current Cyclopts App instance.
         bound_args: Parsed Cyclopts bound arguments.
         ios: Parameter names that map to input/output files and directories.
+        argument_collection: Assembled Cyclopts argument collection.
         software_version: Optional program version override.
 
     Returns:
         A tuple of (Program, IOArgumentPaths).
     """
-    program = program_from_app(app, bound_args)
+    program = program_from_app(app)
     if software_version is not None:
         program.version = software_version
 
+    name_info: dict[str, tuple[str, str]] = {}
+    for arg in argument_collection:
+        name = arg.name.lstrip("-")
+        field_name = arg.field_info.names[0]
+        ann = arg.field_info.annotation
+        help_text = str(ann.__metadata__[0]) if hasattr(ann, "__metadata__") and ann.__metadata__ else ""
+        name_info[name] = (field_name, help_text)
+
+    def resolve(names: list[str]) -> list[IOArgumentPath]:
+        result: list[IOArgumentPath] = []
+        for name in names:
+            info = name_info.get(name)
+            if info is None or info[0] not in bound_args.arguments:
+                logger.warning(f"Argument name '{name}' does not exist in parsed Cyclopts args.")
+                continue
+            field_name, help_text = info
+            paths = cyclopts_value2paths(bound_args.arguments[field_name])
+            if not paths:
+                logger.warning(f"Argument name '{name}' has no associated path-like argument value(s).")
+            result.extend(IOArgumentPath(name=name, path=p, help=help_text) for p in paths)
+        return result
+
     ioargs = IOArgumentPaths(
-        input_files=map_names2paths(app, bound_args, ios.input_files),
-        output_files=map_names2paths(app, bound_args, ios.output_files),
-        input_dirs=map_names2paths(app, bound_args, ios.input_dirs),
-        output_dirs=map_names2paths(app, bound_args, ios.output_dirs),
+        input_files=resolve(ios.input_files),
+        output_files=resolve(ios.output_files),
+        input_dirs=resolve(ios.input_dirs),
+        output_dirs=resolve(ios.output_dirs),
     )
     return program, ioargs
 
@@ -226,6 +166,7 @@ def record_cyclopts(
     app: App,
     bound_args: inspect.BoundArguments,
     ios: IOArgumentNames,
+    argument_collection: ArgumentCollection,
     start_time: datetime,
     crate_dir: Path | None = None,
     argv: list[str] | None = None,
@@ -246,6 +187,7 @@ def record_cyclopts(
         app: Current Cyclopts App instance.
         bound_args: Parsed Cyclopts bound arguments.
         ios: Parameter names that map to input/output files and directories.
+        argument_collection: Assembled Cyclopts argument collection.
         start_time: Datetime when the action started.
         crate_dir: Optional path to RO-Crate directory.
         argv: Optional command arguments to use in action id.
@@ -261,6 +203,7 @@ def record_cyclopts(
         app,
         bound_args,
         ios,
+        argument_collection,
         software_version=software_version,
     )
     return record(
@@ -275,33 +218,33 @@ def record_cyclopts(
     )
 
 
-def _detect_ios_from_app(app: App) -> IOArgumentNames:
-    """Auto-detect input/output arguments from Annotated metadata.
+def _detect_ios_and_trigger(
+    argument_collection: ArgumentCollection,
+) -> tuple[IOArgumentNames, str | None]:
+    """Auto-detect input/output arguments and optional record trigger from Annotated metadata.
 
     Args:
-        app: The Cyclopts App instance.
+        argument_collection: Assembled Cyclopts argument collection.
 
     Returns:
-        IOArgumentNames with detected argument names.
+        A tuple of (IOArgumentNames, trigger_arg_name_or_None).
 
     Raises:
         ValueError: If no arguments with INPUT/OUTPUT markers are found.
     """
     ios = IOArgumentNames()
+    record_trigger_name: str | None = None
 
-    for arg in app.assemble_argument_collection():
+    for arg in argument_collection:
         name = arg.name.lstrip("-")
         ann = arg.field_info.annotation
-        if hasattr(ann, "__metadata__"):
-            for meta in ann.__metadata__:
-                if meta is INPUT_FILE or meta is INPUT_FILES:
-                    ios.input_files.append(name)
-                elif meta is INPUT_DIR or meta is INPUT_DIRS:
-                    ios.input_dirs.append(name)
-                elif meta is OUTPUT_FILE or meta is OUTPUT_FILES:
-                    ios.output_files.append(name)
-                elif meta is OUTPUT_DIR or meta is OUTPUT_DIRS:
-                    ios.output_dirs.append(name)
+        if not hasattr(ann, "__metadata__"):
+            continue
+        for meta in ann.__metadata__:
+            if meta in _MARKER_TO_CATEGORY:
+                getattr(ios, _MARKER_TO_CATEGORY[meta]).append(name)
+            elif meta == RECORD_TRIGGER:
+                record_trigger_name = name
 
     if not any(vars(ios).values()):
         raise ValueError(
@@ -309,26 +252,7 @@ def _detect_ios_from_app(app: App) -> IOArgumentNames:
             "Use Annotated[Path, INPUT_FILE] or similar markers on function parameters."
         )
 
-    return ios
-
-
-def _detect_record_trigger_from_app(app: App) -> str | None:
-    """Detect the argument annotated as RECORD_TRIGGER.
-
-    Args:
-        app: The Cyclopts App instance.
-
-    Returns:
-        The trigger argument name if found, otherwise None.
-    """
-    for arg in app.assemble_argument_collection():
-        name = arg.name.lstrip("-")
-        ann = arg.field_info.annotation
-        if hasattr(ann, "__metadata__"):
-            for meta in ann.__metadata__:
-                if meta == RECORD_TRIGGER:
-                    return name
-    return None
+    return ios, record_trigger_name
 
 
 def _should_record(
@@ -376,8 +300,8 @@ def run_with_record(
     Raises:
         ValueError: If no arguments with INPUT/OUTPUT markers are found.
     """
-    ios = _detect_ios_from_app(app)
-    record_trigger_name = _detect_record_trigger_from_app(app)
+    argument_collection = app.assemble_argument_collection()
+    ios, record_trigger_name = _detect_ios_and_trigger(argument_collection)
 
     def patched_call(self: App, *args: Any, **kwargs: Any):
         start_time = datetime.now(tz=UTC)
@@ -390,7 +314,7 @@ def run_with_record(
         elif hasattr(argv, "__iter__") and not isinstance(argv, list):
             argv = list(argv)
 
-        cmd, bound_args, unused = self.parse_args(argv)
+        _, bound_args, _ = self.parse_args(argv)
 
         try:
             result = _ORIGINAL_CYCLOPTS_APP_CALL(self, *args, **kwargs)
@@ -404,6 +328,7 @@ def run_with_record(
                 app=self,
                 bound_args=bound_args,
                 ios=ios,
+                argument_collection=argument_collection,
                 start_time=start_time,
                 end_time=end_time,
                 crate_dir=crate_dir,

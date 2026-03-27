@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pytest
+import rocrate_action_recorder.adapters.cyclopts as cyclopts_adapter
 
 from typing import Annotated
 
@@ -11,7 +12,6 @@ from rocrate_action_recorder.adapters.cyclopts import (
     RECORD_TRIGGER,
     cyclopts_value2paths,
     run_with_record,
-    try_convert_to_path,
 )
 
 
@@ -98,6 +98,33 @@ class TestRunWithRecord:
         assert output_file.read_text() == "HELLO"
         assert (tmp_path / "ro-crate-metadata.json").exists()
 
+    def test_single_argument_collection_reused(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        app = App(version="1.0.0")
+
+        @app.default
+        def myfunc():
+            return None
+
+        captured: dict[str, int] = {}
+
+        def fake_detect_ios_and_trigger(argument_collection):
+            captured["detect"] = id(argument_collection)
+            return cyclopts_adapter.IOArgumentNames(), None
+
+        def fake_record_cyclopts(**kwargs):
+            captured["record"] = id(kwargs["argument_collection"])
+            return tmp_path / "ro-crate-metadata.json"
+
+        monkeypatch.setattr(cyclopts_adapter, "_detect_ios_and_trigger", fake_detect_ios_and_trigger)
+        monkeypatch.setattr(cyclopts_adapter, "record_cyclopts", fake_record_cyclopts)
+
+        with pytest.raises(SystemExit):
+            run_with_record(app, tokens=[])
+
+        assert captured["detect"] == captured["record"]
+
 
 class Test_cyclopts_value2paths:
     def test_single_path(self, tmp_path: Path):
@@ -125,24 +152,3 @@ class Test_cyclopts_value2paths:
         paths = cyclopts_value2paths([path, path])
 
         assert paths == [path]
-
-
-class Test_try_convert_to_path:
-    def test_path_object(self, tmp_path: Path):
-        path = tmp_path / "test.txt"
-
-        result = try_convert_to_path(path)
-
-        assert result == path
-
-    def test_string_path(self, tmp_path: Path):
-        path = tmp_path / "test.txt"
-
-        result = try_convert_to_path(str(path))
-
-        assert result == path
-
-    def test_none(self):
-        result = try_convert_to_path(None)
-
-        assert result is None
