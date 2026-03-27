@@ -382,7 +382,7 @@ def run_with_record(
     dataset_license: str | None = None,
     *args,
     **kwargs,
-) -> None:
+) -> Any:
     """Record a CLI invocation in an RO-Crate using Cyclopts.
 
     Auto-detects input/output arguments from Annotated metadata on function parameters.
@@ -395,7 +395,19 @@ def run_with_record(
         *args: Positional arguments passed to :meth:`cyclopts.App.__call__`.
         **kwargs: Keyword arguments passed to :meth:`cyclopts.App.__call__`.
 
+    Returns:
+        Behavior depends on the app's result_action setting:
+        - result_action="return_value": Returns the command's return value unchanged.
+        - result_action="return_*": Returns an int/processed value (does not raise SystemExit).
+        - result_action="print_*_return_*": Prints and returns an int or processed value.
+        - result_action="print_*_sys_exit*": Prints, then raises SystemExit.
+        - result_action="sys_exit*": Raises SystemExit (does not return).
+        - Custom callables/sequences: Behavior depends on the configured handler.
+
     Raises:
+        SystemExit: If the app's result_action is configured to call sys.exit()
+            (e.g., "print_non_int_sys_exit", "sys_exit", "sys_exit_zero", or
+            custom handlers that call sys.exit()).
         ValueError: If no arguments with INPUT/OUTPUT markers are found on the executed command.
     """
 
@@ -415,9 +427,12 @@ def run_with_record(
         argument_collection = executed_app.assemble_argument_collection()
         ios, record_trigger_name = _detect_ios_and_trigger(argument_collection)
 
+        exit_raised = False
+        result = None
         try:
             result = _ORIGINAL_CYCLOPTS_APP_CALL(self, *args, **kwargs)
         except SystemExit as e:
+            exit_raised = True
             result = e.code
 
         end_time = datetime.now(tz=UTC)
@@ -436,11 +451,13 @@ def run_with_record(
                 dataset_license=dataset_license,
             )
 
-        raise SystemExit(result)
+        if exit_raised:
+            raise SystemExit(result)
+        return result
 
     app.__class__.__call__ = patched_call
 
     try:
-        app(*args, **kwargs)
+        return app(*args, **kwargs)
     finally:
         app.__class__.__call__ = _ORIGINAL_CYCLOPTS_APP_CALL
