@@ -7,4 +7,11 @@
 - [x] Task 4 — File-like objects with `.name`
 - [x] Task 5 — Multi-value argument with mixed real paths and stdio
 - [x] Task 6 — Optional and default path arguments
+- [ ] Task 8 — Root-level `RECORD_TRIGGER` with subcommands (trigger flag on root app is invisible to subcommand argument collection; recording always/never happens incorrectly)
+- [ ] Task 9 — Flattened sub-apps (`app.command(sub_app, name="*")`): wrong argument collection resolved when subcommand is flattened into parent
+- [ ] Task 10 — `*args` variable positional IO paths: tuple stored in `bound_args` falls through `search()` with no tuple branch, silently missing all paths
+- [ ] Task 11 — String tokens with spaces in paths: `argv.split()` used instead of `shlex.split`, producing corrupted action IDs for paths containing spaces
+- [ ] Task 12 — Pydantic/attrs/NamedTuple nested IO paths: `is_dataclass()` misses these types, so paths nested inside Pydantic/attrs models are silently skipped
+- [ ] Task 13 — Async commands: verify recording timing and return value handling for `async def` commands
+- [ ] Task 14 — Meta App entry point (`app.meta()`): unsupported/untested pattern, may record at wrong moment or with wrong context
 
