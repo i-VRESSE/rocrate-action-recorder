@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 import json
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any, cast
 
 import pytest
 import rocrate_action_recorder.adapters.cyclopts as cyclopts_adapter
@@ -10,11 +10,57 @@ from cyclopts import App, Parameter
 from cyclopts.types import StdioPath
 from rocrate_action_recorder.adapters.cyclopts import (
     INPUT_FILE,
+    INPUT_FILES,
     OUTPUT_FILE,
+    OUTPUT_FILES,
     RECORD_TRIGGER,
     cyclopts_value2paths,
     run_with_record,
 )
+
+
+def assert_recorded_action(
+    tmp_path: Path,
+    *,
+    expected_action_id: str | None = None,
+    expected_input_ids: set[str] | None = None,
+    expected_output_ids: set[str] | None = None,
+    excluded_input_ids: set[str] | None = None,
+    excluded_output_ids: set[str] | None = None,
+) -> dict[str, dict[str, Any]]:
+    crate_path = tmp_path / "ro-crate-metadata.json"
+    assert crate_path.exists()
+
+    graph = cast(
+        dict[str, dict[str, Any]],
+        {entry["@id"]: entry for entry in json.loads(crate_path.read_text())["@graph"]},
+    )
+    action = next(entry for entry in graph.values() if entry.get("@type") == "CreateAction")
+
+    if expected_action_id is not None:
+        assert action["@id"] == expected_action_id
+        assert action["name"] == expected_action_id
+
+    input_ids = {
+        entry["@id"] for entry in cast(list[dict[str, str]], action.get("object", []))
+    }
+    output_ids = {
+        entry["@id"] for entry in cast(list[dict[str, str]], action.get("result", []))
+    }
+
+    if expected_input_ids is not None:
+        assert expected_input_ids <= input_ids
+
+    if expected_output_ids is not None:
+        assert expected_output_ids <= output_ids
+
+    if excluded_input_ids is not None:
+        assert excluded_input_ids.isdisjoint(input_ids)
+
+    if excluded_output_ids is not None:
+        assert excluded_output_ids.isdisjoint(output_ids)
+
+    return graph
 
 
 class TestRunWithRecord:
@@ -47,6 +93,92 @@ class TestRunWithRecord:
         assert output_file.read_text() == "HELLO"
         crate_path = tmp_path / "ro-crate-metadata.json"
         assert crate_path.exists()
+
+    def test_multiple_input_files(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.chdir(tmp_path)
+
+        input_file_1 = tmp_path / "input1.txt"
+        input_file_2 = tmp_path / "input2.txt"
+        input_file_1.write_text("hello")
+        input_file_2.write_text("world")
+        output_file = tmp_path / "output.txt"
+
+        app = App(version="1.0.0")
+
+        @app.default
+        def myfunc(
+            *,
+            input_files: Annotated[list[Path], INPUT_FILES],
+            output: Annotated[Path, OUTPUT_FILE],
+        ):
+            combined = "\n".join(path.read_text().upper() for path in input_files)
+            return output.write_text(combined)
+
+        with pytest.raises(SystemExit) as exc_info:
+            run_with_record(
+                app,
+                dataset_license="CC-BY-4.0",
+                tokens=[
+                    "--input-files",
+                    str(input_file_1),
+                    "--input-files",
+                    str(input_file_2),
+                    "--output",
+                    str(output_file),
+                ],
+            )
+
+        assert exc_info.value.code == 11
+        assert output_file.read_text() == "HELLO\nWORLD"
+        assert_recorded_action(
+            tmp_path,
+            expected_input_ids={"input1.txt", "input2.txt"},
+        )
+
+    def test_multiple_output_files(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.chdir(tmp_path)
+
+        input_file = tmp_path / "input.txt"
+        input_file.write_text("hello")
+        output_file_1 = tmp_path / "output1.txt"
+        output_file_2 = tmp_path / "output2.txt"
+
+        app = App(version="1.0.0")
+
+        @app.default
+        def myfunc(
+            *,
+            input: Annotated[Path, INPUT_FILE],
+            output_files: Annotated[list[Path], OUTPUT_FILES],
+        ):
+            data = input.read_text().upper()
+            return sum(output.write_text(data) for output in output_files)
+
+        with pytest.raises(SystemExit) as exc_info:
+            run_with_record(
+                app,
+                dataset_license="CC-BY-4.0",
+                tokens=[
+                    "--input",
+                    str(input_file),
+                    "--output-files",
+                    str(output_file_1),
+                    "--output-files",
+                    str(output_file_2),
+                ],
+            )
+
+        assert exc_info.value.code == 10
+        assert output_file_1.read_text() == "HELLO"
+        assert output_file_2.read_text() == "HELLO"
+        assert_recorded_action(
+            tmp_path,
+            expected_output_ids={"output1.txt", "output2.txt"},
+        )
 
     @pytest.fixture
     def app_with_record_trigger(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
@@ -157,17 +289,11 @@ class TestRunWithRecord:
 
         assert exc_info.value.code == 10
         assert output_file.read_text() == "from stdin"
-
-        crate_path = tmp_path / "ro-crate-metadata.json"
-        assert crate_path.exists()
-
-        graph = {e["@id"]: e for e in json.loads(crate_path.read_text())["@graph"]}
-        action = next(e for e in graph.values() if e.get("@type") == "CreateAction")
-        input_ids = {o["@id"] for o in action.get("object", [])}
-        output_ids = {r["@id"] for r in action.get("result", [])}
-
-        assert "-" not in input_ids
-        assert "output.txt" in output_ids
+        assert_recorded_action(
+            tmp_path,
+            expected_output_ids={"output.txt"},
+            excluded_input_ids={"-"},
+        )
         assert (
             "Unable to convert stdin/stdout file-like object to Path, ignoring it"
             in caplog.text
@@ -206,18 +332,13 @@ class TestRunWithRecordSingleLevelSubcommand:
                 tokens=["process", str(input_file), str(output_file)],
             )
 
-        crate_path = tmp_path / "ro-crate-metadata.json"
-        assert crate_path.exists()
-        graph = {e["@id"]: e for e in json.loads(crate_path.read_text())["@graph"]}
-
-        action = next(e for e in graph.values() if e.get("@type") == "CreateAction")
         expected_action_id = f"process {input_file} {output_file}"
-        assert action["@id"] == expected_action_id
-        assert action["name"] == expected_action_id
-        input_ids = {o["@id"] for o in action.get("object", [])}
-        output_ids = {r["@id"] for r in action.get("result", [])}
-        assert "input.txt" in input_ids
-        assert "output.txt" in output_ids
+        graph = assert_recorded_action(
+            tmp_path,
+            expected_action_id=expected_action_id,
+            expected_input_ids={"input.txt"},
+            expected_output_ids={"output.txt"},
+        )
         assert not any("schema" in eid for eid in graph)
 
     def test_subcommand_with_trigger(
@@ -249,19 +370,14 @@ class TestRunWithRecordSingleLevelSubcommand:
             )
 
         assert exc_info.value.code == 4
-        crate_path = tmp_path / "ro-crate-metadata.json"
-        assert crate_path.exists()
         assert output_file.read_text() == "DATA"
-        graph = {e["@id"]: e for e in json.loads(crate_path.read_text())["@graph"]}
-
-        action = next(e for e in graph.values() if e.get("@type") == "CreateAction")
         expected_action_id = f"process --prov {input_file} {output_file}"
-        assert action["@id"] == expected_action_id
-        assert action["name"] == expected_action_id
-        input_ids = {o["@id"] for o in action.get("object", [])}
-        output_ids = {r["@id"] for r in action.get("result", [])}
-        assert "input.txt" in input_ids
-        assert "output.txt" in output_ids
+        assert_recorded_action(
+            tmp_path,
+            expected_action_id=expected_action_id,
+            expected_input_ids={"input.txt"},
+            expected_output_ids={"output.txt"},
+        )
 
     def test_subcommand_with_trigger_in_dataclass_on(
         self,
@@ -378,18 +494,13 @@ class TestRunWithRecordTwoLevelSubcommand:
                 tokens=["remote", "add", str(input_file), str(output_file)],
             )
 
-        crate_path = tmp_path / "ro-crate-metadata.json"
-        assert crate_path.exists()
-        graph = {e["@id"]: e for e in json.loads(crate_path.read_text())["@graph"]}
-
-        action = next(e for e in graph.values() if e.get("@type") == "CreateAction")
         expected_action_id = f"remote add {input_file} {output_file}"
-        assert action["@id"] == expected_action_id
-        assert action["name"] == expected_action_id
-        input_ids = {o["@id"] for o in action.get("object", [])}
-        output_ids = {r["@id"] for r in action.get("result", [])}
-        assert "input.txt" in input_ids
-        assert "output.txt" in output_ids
+        graph = assert_recorded_action(
+            tmp_path,
+            expected_action_id=expected_action_id,
+            expected_input_ids={"input.txt"},
+            expected_output_ids={"output.txt"},
+        )
         assert not any("schema" in eid for eid in graph)
 
     def test_subcommand_two_levels_with_trigger(
@@ -424,19 +535,14 @@ class TestRunWithRecordTwoLevelSubcommand:
             )
 
         assert exc_info.value.code == 4
-        crate_path = tmp_path / "ro-crate-metadata.json"
-        assert crate_path.exists()
         assert output_file.read_text() == "DATA"
-        graph = {e["@id"]: e for e in json.loads(crate_path.read_text())["@graph"]}
-
-        action = next(e for e in graph.values() if e.get("@type") == "CreateAction")
         expected_action_id = f"remote add --prov {input_file} {output_file}"
-        assert action["@id"] == expected_action_id
-        assert action["name"] == expected_action_id
-        input_ids = {o["@id"] for o in action.get("object", [])}
-        output_ids = {r["@id"] for r in action.get("result", [])}
-        assert "input.txt" in input_ids
-        assert "output.txt" in output_ids
+        assert_recorded_action(
+            tmp_path,
+            expected_action_id=expected_action_id,
+            expected_input_ids={"input.txt"},
+            expected_output_ids={"output.txt"},
+        )
 
     def test_subcommand_two_levels_with_trigger_in_dataclass_on(
         self,
