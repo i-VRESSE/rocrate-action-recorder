@@ -8,7 +8,7 @@ from typing import Annotated, Any, cast
 import cyclopts
 import pytest
 from cyclopts import App, Parameter
-from cyclopts.types import StdioPath
+from cyclopts.types import StdioPath, ExistingDirectory, NonExistentDirectory
 from pydantic import BaseModel
 
 from rocrate_action_recorder.adapters.cyclopts import (
@@ -25,6 +25,7 @@ from rocrate_action_recorder.adapters.cyclopts import (
     run_with_record,
 )
 from rocrate_action_recorder.adapters.shared import value2paths as cyclopts_value2paths
+from rocrate_action_recorder.core import Program
 
 
 def assert_crate(
@@ -39,12 +40,19 @@ def assert_crate(
     crate_path = tmp_path / "ro-crate-metadata.json"
     assert crate_path.exists()
 
+    if (
+        expected_action_id is None
+        and expected_input_ids is None
+        and expected_output_ids is None
+        and excluded_input_ids is None
+        and excluded_output_ids is None
+    ):
+        return {}
+
     graph = cast(
         dict[str, dict[str, Any]],
         {entry["@id"]: entry for entry in json.loads(crate_path.read_text())["@graph"]},
     )
-    # TODO remove debug print
-    print(crate_path.read_text())
     action = next(
         entry for entry in graph.values() if entry.get("@type") == "CreateAction"
     )
@@ -86,7 +94,9 @@ class TestRunWithRecord:
         def test_single_input_output_file(self, working_tmp_path: Path):
             input_file = working_tmp_path / "input.txt"
             input_file.write_text("hello")
+            input_fn = input_file.name
             output_file = working_tmp_path / "output.txt"
+            output_fn = output_file.name
 
             app = App(result_action="return_value", version="1.0.0")
 
@@ -100,20 +110,27 @@ class TestRunWithRecord:
             result = run_with_record(
                 app,
                 dataset_license="CC-BY-4.0",
-                tokens=[str(input_file), str(output_file)],
+                tokens=[input_fn, output_fn],
             )
 
             assert result == 5
             assert output_file.read_text() == "HELLO"
-            crate_path = working_tmp_path / "ro-crate-metadata.json"
-            assert crate_path.exists()
+            assert_crate(
+                working_tmp_path,
+                expected_action_id=f"myfunc {input_fn} {output_fn}",
+                expected_input_ids={input_fn},
+                expected_output_ids={output_fn},
+            )
 
         def test_multiple_input_files(self, working_tmp_path: Path):
             input_file_1 = working_tmp_path / "input1.txt"
+            input_fn1 = input_file_1.name
             input_file_2 = working_tmp_path / "input2.txt"
+            input_fn2 = input_file_2.name
             input_file_1.write_text("hello")
             input_file_2.write_text("world")
             output_file = working_tmp_path / "output.txt"
+            output_fn = output_file.name
 
             app = App(result_action="return_value", version="1.0.0")
 
@@ -131,11 +148,11 @@ class TestRunWithRecord:
                 dataset_license="CC-BY-4.0",
                 tokens=[
                     "--input-files",
-                    str(input_file_1),
+                    input_fn1,
                     "--input-files",
-                    str(input_file_2),
+                    input_fn2,
                     "--output",
-                    str(output_file),
+                    output_fn,
                 ],
             )
 
@@ -143,14 +160,18 @@ class TestRunWithRecord:
             assert output_file.read_text() == "HELLO\nWORLD"
             assert_crate(
                 working_tmp_path,
+                expected_action_id=f"myfunc --input-files {input_fn1} --input-files {input_fn2} --output {output_fn}",
                 expected_input_ids={"input1.txt", "input2.txt"},
             )
 
         def test_multiple_output_files(self, working_tmp_path: Path):
             input_file = working_tmp_path / "input.txt"
+            input_fn = input_file.name
             input_file.write_text("hello")
             output_file_1 = working_tmp_path / "output1.txt"
+            output_fn1 = output_file_1.name
             output_file_2 = working_tmp_path / "output2.txt"
+            output_fn2 = output_file_2.name
 
             app = App(result_action="return_value", version="1.0.0")
 
@@ -168,11 +189,11 @@ class TestRunWithRecord:
                 dataset_license="CC-BY-4.0",
                 tokens=[
                     "--input",
-                    str(input_file),
+                    input_fn,
                     "--output-files",
-                    str(output_file_1),
+                    output_fn1,
                     "--output-files",
-                    str(output_file_2),
+                    output_fn2,
                 ],
             )
 
@@ -181,21 +202,25 @@ class TestRunWithRecord:
             assert output_file_2.read_text() == "HELLO"
             assert_crate(
                 working_tmp_path,
-                expected_output_ids={"output1.txt", "output2.txt"},
+                expected_action_id=f"myfunc --input {input_fn} --output-files {output_fn1} --output-files {output_fn2}",
+                expected_input_ids={input_fn},
+                expected_output_ids={output_fn1, output_fn2},
             )
 
         def test_single_input_output_dir(self, working_tmp_path: Path):
             input_dir = working_tmp_path / "input"
             input_dir.mkdir()
+            input_fn = input_dir.name
             (input_dir / "a.txt").write_text("hello")
             output_dir = working_tmp_path / "output"
+            output_fn = output_dir.name
 
             app = App(result_action="return_value", version="1.0.0")
 
             @app.default
             def myfunc(
-                input_dir_arg: Annotated[Path, INPUT_DIR],
-                output_dir_arg: Annotated[Path, OUTPUT_DIR],
+                input_dir_arg: Annotated[ExistingDirectory, INPUT_DIR],
+                output_dir_arg: Annotated[NonExistentDirectory, OUTPUT_DIR],
             ):
                 output_dir_arg.mkdir()
                 content = (input_dir_arg / "a.txt").read_text().upper()
@@ -204,13 +229,14 @@ class TestRunWithRecord:
             result = run_with_record(
                 app,
                 dataset_license="CC-BY-4.0",
-                tokens=[str(input_dir), str(output_dir)],
+                tokens=[input_fn, output_fn],
             )
 
             assert result == 5
             assert (output_dir / "a.txt").read_text() == "HELLO"
             assert_crate(
                 working_tmp_path,
+                expected_action_id=f"myfunc {input_fn} {output_fn}",
                 expected_input_ids={"input/"},
                 expected_output_ids={"output/"},
             )
@@ -592,7 +618,7 @@ class TestRunWithRecord:
                 tokens=["process", str(input_file), str(output_file)],
             )
 
-            expected_action_id = f"process {input_file} {output_file}"
+            expected_action_id = f"myapp process {input_file} {output_file}"
             graph = assert_crate(
                 working_tmp_path,
                 expected_action_id=expected_action_id,
@@ -627,7 +653,7 @@ class TestRunWithRecord:
 
             assert result == 4
             assert output_file.read_text() == "DATA"
-            expected_action_id = f"process --prov {input_file} {output_file}"
+            expected_action_id = f"myapp process --prov {input_file} {output_file}"
             assert_crate(
                 working_tmp_path,
                 expected_action_id=expected_action_id,
@@ -670,6 +696,7 @@ class TestRunWithRecord:
             assert result == 4
             crate_path = working_tmp_path / "ro-crate-metadata.json"
             assert crate_path.exists()
+            # TODO use assert_crate
 
         def test_subcommand_with_trigger_in_dataclass_off(
             self,
@@ -732,7 +759,7 @@ class TestRunWithRecord:
                 tokens=["remote", "add", str(input_file), str(output_file)],
             )
 
-            expected_action_id = f"remote add {input_file} {output_file}"
+            expected_action_id = f"myapp remote add {input_file} {output_file}"
             graph = assert_crate(
                 working_tmp_path,
                 expected_action_id=expected_action_id,
@@ -770,7 +797,7 @@ class TestRunWithRecord:
 
             assert result == 4
             assert output_file.read_text() == "DATA"
-            expected_action_id = f"remote add --prov {input_file} {output_file}"
+            expected_action_id = f"myapp remote add --prov {input_file} {output_file}"
             assert_crate(
                 working_tmp_path,
                 expected_action_id=expected_action_id,
@@ -965,6 +992,44 @@ class TestPydanticNestedIO:
 
 
 class TestProgramFromApp:
+    def test_from_app_name(self):
+        app = App(name="myapp", version="1.0.0", help="Help for myapp.")
+
+        @app.default
+        def process(input: Path, output: Path):
+            """Process files."""
+            pass
+
+        result = program_from_app(app)
+
+        expected = Program(
+            name="myapp",
+            version="1.0.0",
+            description="Help for myapp.",
+            subcommands={},
+        )
+
+        assert result == expected
+
+    def test_from_default(self):
+        app = App(version="1.0.0")
+
+        @app.default
+        def process(input: Path, output: Path):
+            """Process files."""
+            pass
+
+        result = program_from_app(app)
+
+        expected = Program(
+            name="process",
+            version="1.0.0",
+            description="Process files.",
+            subcommands={},
+        )
+
+        assert result == expected
+
     def test_single_level_subcommand(self):
         app = App(name="myapp", version="1.0.0")
 
@@ -1211,7 +1276,7 @@ class TestAsyncCommands:
         assert output_file.read_text() == "DATA"
         assert_crate(
             working_tmp_path,
-            expected_action_id=f"process {input_file} {output_file}",
+            expected_action_id=f"myapp process {input_file} {output_file}",
             expected_input_ids={"input.txt"},
             expected_output_ids={"output.txt"},
         )
@@ -1409,7 +1474,7 @@ class TestMetaApp:
         assert output_file.read_text() == "DATA"
         assert_crate(
             working_tmp_path,
-            expected_action_id=f"process {input_file} {output_file}",
+            expected_action_id=f"myapp process {input_file} {output_file}",
             expected_input_ids={"input.txt"},
             expected_output_ids={"output.txt"},
         )

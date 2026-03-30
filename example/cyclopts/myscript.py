@@ -44,5 +44,4 @@ def main(
 
 
 if __name__ == "__main__":
-    # app()
     run_with_record(app, dataset_license="CC-BY-4.0")

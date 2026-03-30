@@ -143,9 +143,9 @@ def program_from_app(app: App) -> Program:
         if version_str is not None:
             version = str(version_str)
 
+    description = app.help if app.help else ""
     cmd = app.default_command
-    description = ""
-    if cmd:
+    if cmd and not description:
         description = getattr(cmd, "__doc__", "") or ""
 
     parent_name = (
@@ -503,7 +503,7 @@ def record_cyclopts(
         ioargs=ioargs,
         start_time=start_time,
         crate_dir=crate_dir,
-        argv=argv,
+        argv=[program.name] + (argv or []),
         end_time=end_time,
         current_user=current_user,
         dataset_license=dataset_license,
