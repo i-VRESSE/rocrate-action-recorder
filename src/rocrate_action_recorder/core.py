@@ -287,6 +287,8 @@ def add_software_application(crate: ROCrate, program: Program) -> SoftwareApplic
     same_version = sa and props.get("version") == program.version
     if not same_version:
         crate.add(software_app)
+    # TODO do something with subcommands? Add as separate SoftwareApplications with "isPartOf" relationship to main one?
+    # currently they are not added to crate
     return software_app
 
 

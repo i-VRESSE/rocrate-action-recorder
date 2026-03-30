@@ -8,7 +8,7 @@ from rocrate_action_recorder.adapters.cyclopts import (
     INPUT_FILE,
     OUTPUT_FILE,
     RECORD_TRIGGER,
-    run_with_record,
+    record_cyclopts,
 )
 
 
@@ -31,6 +31,8 @@ def main(
 ):
     """Uppercase the contents of the input file and write to the output file.
 
+    This is an example handler.
+
     Args:
         input: The input file to read from.
         output: The output file to write to.
@@ -44,4 +46,5 @@ def main(
 
 
 if __name__ == "__main__":
-    run_with_record(app, dataset_license="CC-BY-4.0")
+    with record_cyclopts(app, dataset_license="CC-BY-4.0"):
+        app()

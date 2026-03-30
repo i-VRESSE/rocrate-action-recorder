@@ -1,16 +1,20 @@
 """Adapter for Cyclopts CLI framework."""
 
+from collections.abc import Generator, Iterable
+from contextlib import contextmanager
 import inspect
 import logging
 import shlex
 import sys
-from dataclasses import is_dataclass
+from dataclasses import dataclass, is_dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, LiteralString
 
 from cyclopts import App
 from cyclopts.argument import ArgumentCollection
+from cyclopts.help import format_doc
+from cyclopts.help.inline_text import InlineText
 
 from rocrate_action_recorder.adapters.shared import (
     IOArgumentNames,
@@ -86,7 +90,11 @@ def _collect_subcommands(
 
     for sub_app in app.subapps:
         # Skip built-in help/version subapps
-        if sub_app.name in (("help-print",), ("version-print",)):
+        # TODO install completion sub app
+        if sub_app.name in (
+            ("help-print",),
+            ("version-print",),
+        ):
             continue
 
         sub_app_name = (
@@ -98,7 +106,6 @@ def _collect_subcommands(
 
         # Check if this sub_app has a default command that is a function
         if sub_app.default_command and inspect.isfunction(sub_app.default_command):
-            cmd = sub_app.default_command
             subversion = None
             if sub_app.version:
                 subversion_str = (
@@ -109,7 +116,7 @@ def _collect_subcommands(
             full_name = f"{parent_name} {cmd_name}".strip() if parent_name else cmd_name
             subprogram = Program(
                 name=full_name,
-                description=getattr(cmd, "__doc__", "") or "",
+                description=_plaintext_doc(sub_app),
                 version=subversion,
             )
             subcommands_dict[cmd_name] = subprogram
@@ -128,6 +135,15 @@ def _collect_subcommands(
     return subcommands_dict
 
 
+def _plaintext_doc(app: App) -> str:
+    """Extract plaintext description from a Cyclopts App's docstring."""
+    doc = format_doc(app, "plaintext")
+    if isinstance(doc, InlineText):
+        # primary_renderable has rich.text.Text type, force to string
+        return str(doc.primary_renderable)
+    return ""
+
+
 def program_from_app(app: App) -> Program:
     """Extract Program information from a Cyclopts App.
 
@@ -143,10 +159,7 @@ def program_from_app(app: App) -> Program:
         if version_str is not None:
             version = str(version_str)
 
-    description = app.help if app.help else ""
-    cmd = app.default_command
-    if cmd and not description:
-        description = getattr(cmd, "__doc__", "") or ""
+    description = _plaintext_doc(app)
 
     parent_name = (
         " ".join(app.name) if isinstance(app.name, tuple) else (app.name or "")
@@ -378,42 +391,28 @@ def _lookup_nested_field(value: Any, field_path: str) -> Any | None:
     return current_value
 
 
-def collect_record_info_from_cyclopts(
-    app: App,
+def _collect_ioargs(
     bound_args: inspect.BoundArguments,
     ios: IOArgumentNames,
     argument_collection: ArgumentCollection,
-    software_version: str | None = None,
-    executed_app: App | None = None,
-) -> tuple[Program, IOArgumentPaths]:
-    """Collect Program and IOArgumentPaths from Cyclopts inputs.
+) -> IOArgumentPaths:
+    """Collect IOArgumentPaths from Cyclopts inputs.
 
     Args:
-        app: Root Cyclopts App instance.
         bound_args: Parsed Cyclopts bound arguments.
         ios: Parameter names that map to input/output files and directories.
         argument_collection: Assembled Cyclopts argument collection (from the executed subapp).
-        software_version: Optional program version override.
-        executed_app: Leaf App that was actually invoked; if provided, it is used for future
-            program-name construction in nested subcommand scenarios.
 
     Returns:
-        A tuple of (Program, IOArgumentPaths).
+        A IOArgumentPaths instance
     """
-    program = program_from_app(app)
-    if software_version is not None:
-        program.version = software_version
-
     name_info: dict[str, tuple[str, str]] = {}
     for arg in argument_collection:
         name = arg.name.lstrip("-")
         field_name = arg.field_info.names[0]
-        ann = arg.field_info.annotation
-        help_text = (
-            str(ann.__metadata__[0])
-            if hasattr(ann, "__metadata__") and ann.__metadata__
-            else ""
-        )
+        help_text = ""
+        if arg.parameter.help:
+            help_text = arg.parameter.help
         name_info[name] = (field_name, help_text)
 
     def resolve(names: list[str]) -> list[IOArgumentPath]:
@@ -448,66 +447,7 @@ def collect_record_info_from_cyclopts(
         input_dirs=resolve(ios.input_dirs),
         output_dirs=resolve(ios.output_dirs),
     )
-    return program, ioargs
-
-
-def record_cyclopts(
-    app: App,
-    bound_args: inspect.BoundArguments,
-    ios: IOArgumentNames,
-    argument_collection: ArgumentCollection,
-    start_time: datetime,
-    crate_dir: Path | None = None,
-    argv: list[str] | None = None,
-    end_time: datetime | None = None,
-    current_user: str | None = None,
-    software_version: str | None = None,
-    dataset_license: str | None = None,
-    executed_app: App | None = None,
-) -> Path:
-    """Record a CLI invocation in an RO-Crate using Cyclopts.
-
-    Hint:
-        The argument names passed in :class:`IOArgumentNames` should match keys in
-        the bound arguments (typically from `app.parse_args()` or the decorated function
-        arguments). For example `def myfunc(input: Path, output: Path)` would correspond
-        to parameter names `input` and `output`.
-
-    Args:
-        app: Root Cyclopts App instance.
-        bound_args: Parsed Cyclopts bound arguments.
-        ios: Parameter names that map to input/output files and directories.
-        argument_collection: Assembled Cyclopts argument collection (from the executed subapp).
-        start_time: Datetime when the action started.
-        crate_dir: Optional path to RO-Crate directory.
-        argv: Optional command arguments to use in action id.
-        end_time: Optional datetime when action ended.
-        current_user: Optional user override.
-        software_version: Optional software version override.
-        dataset_license: Optional dataset license string.
-        executed_app: Leaf App that was actually invoked.
-
-    Returns:
-        Path to generated ro-crate-metadata.json.
-    """
-    program, ioargs = collect_record_info_from_cyclopts(
-        app,
-        bound_args,
-        ios,
-        argument_collection,
-        software_version=software_version,
-        executed_app=executed_app,
-    )
-    return record(
-        program=program,
-        ioargs=ioargs,
-        start_time=start_time,
-        crate_dir=crate_dir,
-        argv=[program.name] + (argv or []),
-        end_time=end_time,
-        current_user=current_user,
-        dataset_license=dataset_license,
-    )
+    return ioargs
 
 
 def _extract_markers_from_pydantic_fields(
@@ -661,9 +601,6 @@ def _detect_ios_and_trigger(
 
     Returns:
         A tuple of (IOArgumentNames, trigger_arg_name_or_None).
-
-    Raises:
-        ValueError: If no arguments with INPUT/OUTPUT markers are found.
     """
     ios = IOArgumentNames()
     record_trigger_name: str | None = None
@@ -743,12 +680,6 @@ def _detect_ios_and_trigger(
     if bound_args is not None:
         _collect_markers_from_bound_args(bound_args)
 
-    if not any(vars(ios).values()):
-        raise ValueError(
-            "No arguments with INPUT_FILE/DIR/FILES/DIRS or OUTPUT_FILE/DIR/FILES/DIRS annotations found. "
-            "Use Annotated[Path, INPUT_FILE] or similar markers on function parameters."
-        )
-
     return ios, record_trigger_name
 
 
@@ -796,114 +727,108 @@ def _resolve_executed_subapp(app: App, command: Any) -> App | None:
     return None
 
 
-def run_with_record(
-    app: App,
-    crate_dir: Path | None = None,
-    dataset_license: str | None = None,
-    *args,
-    **kwargs,
-) -> Any:
-    """Record a CLI invocation in an RO-Crate using Cyclopts.
+def _parse_tokens(tokens: str | Iterable[str] | None = None) -> list[str]:
+    if tokens is None:
+        return sys.argv[1:]
+    elif isinstance(tokens, str):
+        return shlex.split(tokens)
+    return list(tokens)
 
-    Auto-detects input/output arguments from Annotated metadata on function parameters.
-    Calls :meth:`cyclopts.App.__call__` internally to execute the CLI and record the invocation.
+
+@dataclass
+class Info:
+    program: Program
+    ioargs: IOArgumentPaths
+    should_record: bool
+    argv: list[str] | None = None
+
+
+def collect_info(
+    app: App,
+    tokens: str | Iterable[str] | None = None,
+    software_version: str | None = None,
+) -> Info:
+    program = program_from_app(app)
+    if software_version is not None:
+        program.version = software_version
+
+    argv = _parse_tokens(tokens)
+    command, bound_args, _ = app.parse_args(argv)
+    executed_app = _resolve_executed_subapp(app, command) or app
+    argument_collection = executed_app.assemble_argument_collection(
+        parse_docstring=True
+    )
+    meta_argument_collection = None
+    if hasattr(app.meta, "default_command") and app.meta.default_command:
+        meta_argument_collection = app.meta.assemble_argument_collection()
+
+    ios, record_trigger_name = _detect_ios_and_trigger(
+        argument_collection,
+        command=command,
+        meta_argument_collection=meta_argument_collection,
+        bound_args=bound_args,
+    )
+
+    is_builtin_command = command in (
+        app.help_print,
+        app.version_print,
+        app.install_completion,
+    )
+    if is_builtin_command:
+        return Info(
+            program=program, ioargs=IOArgumentPaths(), should_record=False, argv=argv
+        )
+
+    should_record = _should_record(bound_args, record_trigger_name)
+    ioargs = _collect_ioargs(
+        bound_args,
+        ios,
+        argument_collection,
+    )
+
+    return Info(program=program, ioargs=ioargs, should_record=should_record, argv=argv)
+
+
+# TODO rename to record onces fully tested
+@contextmanager
+def record_cyclopts(
+    app: App,
+    tokens: str | Iterable[str] | None = None,
+    dataset_license: str | None = None,
+    crate_dir: Path | None = None,
+    software_version: str | None = None,
+    current_user: str | None = None,
+) -> Generator[App]:
+    """Context manager to record a Cyclopts CLI invocation in an RO-Crate.
+
+    Hint:
+        The argument names passed in :class:`IOArgumentNames` should match keys in
+        the bound arguments (typically from `app.parse_args()` or the decorated function
+        arguments). For example `def myfunc(input: Path, output: Path)` would correspond
+        to parameter names `input` and `output`.
 
     Args:
-        app: The Cyclopts App instance.
-        crate_dir: Optional path to RO-Crate directory. If None, uses current directory.
-        dataset_license: License string for the dataset.
-        *args: Positional arguments passed to :meth:`cyclopts.App.__call__`.
-        **kwargs: Keyword arguments passed to :meth:`cyclopts.App.__call__`.
-
-    Returns:
-        Behavior depends on the app's result_action setting:
-        - result_action="return_value": Returns the command's return value unchanged.
-        - result_action="return_*": Returns an int/processed value (does not raise SystemExit).
-        - result_action="print_*_return_*": Prints and returns an int or processed value.
-        - result_action="print_*_sys_exit*": Prints, then raises SystemExit.
-        - result_action="sys_exit*": Raises SystemExit (does not return).
-        - Custom callables/sequences: Behavior depends on the configured handler.
-
-    Raises:
-        SystemExit: If the app's result_action is configured to call sys.exit()
-            (e.g., "print_non_int_sys_exit", "sys_exit", "sys_exit_zero", or
-            custom handlers that call sys.exit()).
-        ValueError: If no arguments with INPUT/OUTPUT markers are found on the executed command.
+        app: Root Cyclopts App instance.
+        tokens: Optional command arguments to use in action id.
+        dataset_license: Optional dataset license string. If absent ro-crate will be invalid.
+        crate_dir: Optional path to RO-Crate directory.
+        software_version: Optional software version override. Otherwise extracted from App instance.
+        current_user: Optional user override. Uses current system user if None.
     """
+    start_time = datetime.now(tz=UTC)
+    info = collect_info(app, tokens, software_version=software_version)
 
-    def patched_call(self: App, *args: Any, **kwargs: Any):
-        start_time = datetime.now(tz=UTC)
+    yield app
 
-        argv = args[0] if args else kwargs.get("tokens")
-        if argv is None:
-            argv = sys.argv[1:]
-        elif isinstance(argv, str):
-            argv = shlex.split(argv)
-        elif hasattr(argv, "__iter__") and not isinstance(argv, list):
-            argv = list(argv)
-
-        command, bound_args, _ = self.parse_args(argv)
-        executed_app = _resolve_executed_subapp(self, command) or self
-
-        # Skip argument collection for help/version commands
-        is_help_or_version = command in (self.help_print, self.version_print)
-        # TODO also skip app.register_install_completion_command()
-        if is_help_or_version:
-            argument_collection = ArgumentCollection()
-        else:
-            argument_collection = executed_app.assemble_argument_collection()
-
-        meta_argument_collection = None
-        if hasattr(self.meta, "default_command") and self.meta.default_command:
-            try:
-                meta_argument_collection = self.meta.assemble_argument_collection()
-            except Exception:
-                meta_argument_collection = None
-
-        # Skip IO detection for help/version commands
-        if is_help_or_version:
-            ios = IOArgumentNames()
-            record_trigger_name = None
-        else:
-            ios, record_trigger_name = _detect_ios_and_trigger(
-                argument_collection,
-                command=command,
-                meta_argument_collection=meta_argument_collection,
-                bound_args=bound_args,
-            )
-
-        exit_raised = False
-        result = None
-        try:
-            result = _ORIGINAL_CYCLOPTS_APP_CALL(self, *args, **kwargs)
-        except SystemExit as e:
-            exit_raised = True
-            result = e.code
-
-        end_time = datetime.now(tz=UTC)
-
-        # Skip recording for help/version commands
-        if not is_help_or_version and _should_record(bound_args, record_trigger_name):
-            record_cyclopts(
-                app=self,
-                executed_app=executed_app,
-                bound_args=bound_args,
-                ios=ios,
-                argument_collection=argument_collection,
-                start_time=start_time,
-                end_time=end_time,
-                crate_dir=crate_dir,
-                argv=argv,
-                dataset_license=dataset_license,
-            )
-
-        if exit_raised:
-            raise SystemExit(result)
-        return result
-
-    app.__class__.__call__ = patched_call
-
-    try:
-        return app(*args, **kwargs)
-    finally:
-        app.__class__.__call__ = _ORIGINAL_CYCLOPTS_APP_CALL
+    end_time = datetime.now(tz=UTC)
+    if info.should_record:
+        record(
+            program=info.program,
+            ioargs=info.ioargs,
+            start_time=start_time,
+            crate_dir=crate_dir,
+            argv=[info.program.name] + (info.argv or []),
+            end_time=end_time,
+            current_user=current_user,
+            dataset_license=dataset_license,
+        )
