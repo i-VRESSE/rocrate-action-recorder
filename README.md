@@ -14,7 +14,7 @@ Useful to track which commands were executed, which files were used as input or 
 
 Supports [RO-Crate 1.1](https://www.researchobject.org/ro-crate/specification/1.1/index.html) specification.
 Specifically the [Process Run Crate profile](https://www.researchobject.org/workflow-run-crate/profiles/0.5/process_run_crate/).
-Provides adapters for both `argparse` and `click` based CLIs.
+Provides adapters for `argparse`, `cyclopts` and `click` based CLIs.
 
 ## Install
 
@@ -26,6 +26,12 @@ For Click support, install the optional extra:
 
 ```shell
 pip install "rocrate-action-recorder[click]"
+```
+
+For Cyclopts support, install the optional extra:
+
+```shell
+pip install "rocrate-action-recorder[cyclopts]"
 ```
 
 ## Usage
@@ -231,7 +237,9 @@ crate_meta = record(
 
 ## Example
 
-See the [argparse example](example/argparse/README.md) and [click example](example/click/README.md).
+* [argparse example](example/argparse/README.md)
+* [click example](example/click/README.md)
+* [cyclopts example](example/cyclopts/README.md)
 
 ### Contributions
 
