@@ -1,13 +1,16 @@
-from dataclasses import dataclass
+import asyncio
 import json
+import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated, Any, cast
 
 import cyclopts
 import pytest
-
 from cyclopts import App, Parameter
 from cyclopts.types import StdioPath
+from pydantic import BaseModel
+
 from rocrate_action_recorder.adapters.cyclopts import (
     INPUT_DIR,
     INPUT_DIRS,
@@ -18,9 +21,10 @@ from rocrate_action_recorder.adapters.cyclopts import (
     OUTPUT_FILE,
     OUTPUT_FILES,
     RECORD_TRIGGER,
-    cyclopts_value2paths,
+    program_from_app,
     run_with_record,
 )
+from rocrate_action_recorder.adapters.shared import value2paths as cyclopts_value2paths
 
 
 def assert_crate(
@@ -39,6 +43,8 @@ def assert_crate(
         dict[str, dict[str, Any]],
         {entry["@id"]: entry for entry in json.loads(crate_path.read_text())["@graph"]},
     )
+    # TODO remove debug print
+    print(crate_path.read_text())
     action = next(
         entry for entry in graph.values() if entry.get("@type") == "CreateAction"
     )
@@ -849,6 +855,762 @@ class TestRunWithRecord:
             assert result == 4
             crate_path = working_tmp_path / "ro-crate-metadata.json"
             assert not crate_path.exists()
+
+
+class TestPydanticNestedIO:
+    def test_pydantic_nested_model(self, working_tmp_path: Path):
+        """Test that nested Pydantic models with Path fields work."""
+        input_file = working_tmp_path / "input.txt"
+        input_file.write_text("data")
+        output_file = working_tmp_path / "output.txt"
+
+        class IOConfig(BaseModel):
+            input: Annotated[Path, INPUT_FILE]
+            output: Annotated[Path, OUTPUT_FILE]
+
+        class Config(BaseModel):
+            io: IOConfig
+
+        app = App(name="myapp", result_action="return_value")
+
+        @app.default
+        def main(config: Config):
+            """Main command with nested Pydantic config."""
+            config.io.output.write_text(config.io.input.read_text().upper())
+            return 10
+
+        result = run_with_record(
+            app,
+            dataset_license="CC-BY-4.0",
+            tokens=[input_file.name, output_file.name],
+        )
+
+        assert result == 10
+        assert output_file.read_text() == "DATA"
+        assert_crate(
+            working_tmp_path,
+            expected_input_ids={"input.txt"},
+            expected_output_ids={"output.txt"},
+            # TODO fix action id
+            # expected_action_id=f"myapp {input_file.name} {output_file.name}",
+        )
+
+    def test_pydantic_simple_model(self, working_tmp_path: Path):
+        """Test that simple Pydantic models with Path fields work."""
+        input_file = working_tmp_path / "input.txt"
+        input_file.write_text("data")
+        output_file = working_tmp_path / "output.txt"
+
+        class Config(BaseModel):
+            input: Annotated[Path, INPUT_FILE]
+            output: Annotated[Path, OUTPUT_FILE]
+
+        app = App(name="myapp", result_action="return_value")
+
+        @app.default
+        def main(config: Config):
+            """Main command with Pydantic config."""
+            config.output.write_text(config.input.read_text().upper())
+            return 4
+
+        result = run_with_record(
+            app,
+            dataset_license="CC-BY-4.0",
+            tokens=[str(input_file), str(output_file)],
+        )
+
+        assert result == 4
+        assert output_file.read_text() == "DATA"
+        assert_crate(
+            working_tmp_path,
+            expected_input_ids={"input.txt"},
+            expected_output_ids={"output.txt"},
+        )
+
+    def test_pydantic_with_record_trigger(self, working_tmp_path: Path):
+        """Test that Pydantic models with RECORD_TRIGGER work."""
+        input_file = working_tmp_path / "input.txt"
+        input_file.write_text("data")
+        output_file = working_tmp_path / "output.txt"
+
+        class Config(BaseModel):
+            input: Annotated[Path, INPUT_FILE]
+            output: Annotated[Path, OUTPUT_FILE]
+            prov: Annotated[bool, RECORD_TRIGGER] = False
+
+        app = App(name="myapp", result_action="return_value")
+
+        @app.default
+        def main(config: Config):
+            """Main command with Pydantic config and trigger."""
+            config.output.write_text(config.input.read_text().upper())
+            return 4
+
+        # With trigger off
+        result = run_with_record(
+            app,
+            dataset_license="CC-BY-4.0",
+            tokens=[str(input_file), str(output_file)],
+        )
+        assert result == 4
+        assert not (working_tmp_path / "ro-crate-metadata.json").exists()
+
+        # With trigger on - nested Pydantic fields use dot notation
+        run_with_record(
+            app,
+            dataset_license="CC-BY-4.0",
+            tokens=["--config.prov", str(input_file), str(output_file)],
+        )
+        assert (working_tmp_path / "ro-crate-metadata.json").exists()
+
+
+class TestProgramFromApp:
+    def test_single_level_subcommand(self):
+        app = App(name="myapp", version="1.0.0")
+
+        @app.command
+        def process(input: Path, output: Path):
+            """Process files."""
+            pass
+
+        program = program_from_app(app)
+
+        # TODO asert against expected_program instead of individual fields
+        assert program.name == "myapp"
+        assert program.version == "1.0.0"
+        assert "process" in program.subcommands
+        assert program.subcommands["process"].name == "myapp process"
+        # Subcommand inherits parent version when not specified
+        assert program.subcommands["process"].version == "1.0.0"
+        assert program.subcommands["process"].description == "Process files."
+
+    def test_single_level_subcommand_no_version(self):
+        app = App(name="myapp")
+
+        @app.command
+        def process(input: Path, output: Path):
+            """Process files."""
+            pass
+
+        program = program_from_app(app)
+
+        assert program.name == "myapp"
+        assert program.version is None
+        assert "process" in program.subcommands
+        assert program.subcommands["process"].name == "myapp process"
+        assert program.subcommands["process"].version is None
+        assert program.subcommands["process"].description == "Process files."
+
+    def test_two_level_nested_subcommand(self):
+        app = App(name="myapp", version="1.0.0")
+        remote = App(name="remote", version="2.0.0")
+
+        @remote.command
+        def add(input: Path, output: Path):
+            """Add a remote."""
+            pass
+
+        app.command(remote)
+
+        program = program_from_app(app)
+
+        assert program.name == "myapp"
+        assert "add" in program.subcommands
+        assert program.subcommands["add"].name == "myapp remote add"
+        assert program.subcommands["add"].version == "2.0.0"
+        assert program.subcommands["add"].description == "Add a remote."
+
+    def test_three_level_nested_subcommand(self):
+        app = App(name="myapp", version="1.0.0")
+        group = App(name="group", version="1.1.0")
+        remote = App(name="remote", version="2.0.0")
+
+        @remote.command
+        def add(input: Path, output: Path):
+            """Add a remote."""
+            pass
+
+        group.command(remote)
+        app.command(group)
+
+        program = program_from_app(app)
+
+        assert program.name == "myapp"
+        assert "add" in program.subcommands
+        assert program.subcommands["add"].name == "myapp group remote add"
+        assert program.subcommands["add"].version == "2.0.0"
+        assert program.subcommands["add"].description == "Add a remote."
+
+    def test_flattened_subcommand(self):
+        app = App(name="myapp", version="1.0.0")
+        tools = App(name="tools", version="2.0.0")
+
+        @tools.command
+        def compress(input: Path, output: Path):
+            """Compress a file."""
+            pass
+
+        app.command(tools, name="*")
+
+        program = program_from_app(app)
+
+        assert program.name == "myapp"
+        assert "compress" in program.subcommands
+        assert program.subcommands["compress"].name == "myapp compress"
+        assert program.subcommands["compress"].version == "2.0.0"
+        assert program.subcommands["compress"].description == "Compress a file."
+
+    def test_multiple_subcommands_same_level(self):
+        app = App(name="myapp", version="1.0.0")
+        remote = App(name="remote", version="2.0.0")
+
+        @remote.command
+        def add(input: Path):
+            """Add a remote."""
+            pass
+
+        @remote.command
+        def remove(input: Path):
+            """Remove a remote."""
+            pass
+
+        app.command(remote)
+
+        program = program_from_app(app)
+
+        assert program.name == "myapp"
+        assert "add" in program.subcommands
+        assert "remove" in program.subcommands
+        assert program.subcommands["add"].name == "myapp remote add"
+        assert program.subcommands["remove"].name == "myapp remote remove"
+
+    def test_mixed_nested_and_flattened(self):
+        app = App(name="myapp", version="1.0.0")
+        group = App(name="group")
+        tools = App(name="tools")
+
+        @group.command
+        def status():
+            """Status command."""
+            pass
+
+        @tools.command
+        def compress(input: Path):
+            """Compress a file."""
+            pass
+
+        app.command(group)
+        app.command(tools, name="*")
+
+        program = program_from_app(app)
+
+        assert program.name == "myapp"
+        assert "status" in program.subcommands
+        assert "compress" in program.subcommands
+        assert program.subcommands["status"].name == "myapp group status"
+        assert program.subcommands["compress"].name == "myapp compress"
+
+
+class TestArgsVariablePositional:
+    def test_star_args_single_file(self, working_tmp_path: Path):
+        """Test that *args parameter with INPUT_FILES marker works."""
+        input_file_1 = working_tmp_path / "input1.txt"
+        input_fn_1 = input_file_1.name
+        input_file_2 = working_tmp_path / "input2.txt"
+        input_fn_2 = input_file_2.name
+        input_file_1.write_text("hello")
+        input_file_2.write_text("world")
+        output_file = working_tmp_path / "output.txt"
+        output_fn = output_file.name
+        # TODO use file name in other tests as well
+
+        app = App(result_action="return_value", version="1.0.0")
+
+        @app.default
+        def myfunc(
+            *files: Annotated[tuple[Path, ...], INPUT_FILES],
+            output: Annotated[Path, OUTPUT_FILE],
+        ):
+            # Cyclopts passes *args as tuple of tuples: ((Path1,), (Path2,))
+            combined = "\n".join(f[0].read_text().upper() for f in files)
+            return output.write_text(combined)
+
+        # TODO fix `WARNING  rocrate_action_recorder.adapters.cyclopts:cyclopts.py:424 Argument name 'files' does not exist in parsed Cyclopts args.`
+        result = run_with_record(
+            app,
+            dataset_license="CC-BY-4.0",
+            tokens=[input_fn_1, input_fn_2, "--output", output_fn],
+        )
+
+        assert result == 11
+        assert output_file.read_text() == "HELLO\nWORLD"
+        assert_crate(
+            working_tmp_path,
+            expected_input_ids={input_fn_1, input_fn_2},
+            expected_output_ids={output_fn},
+        )
+
+
+class TestAsyncCommands:
+    def test_async_command_basic(self, working_tmp_path: Path):
+        """Test that basic async command recording works."""
+        input_file = working_tmp_path / "input.txt"
+        input_file.write_text("data")
+        output_file = working_tmp_path / "output.txt"
+
+        # TODO if version is not given, use pytest version, always pass version in tests
+        app = App(result_action="return_value", version="1.0.0")
+
+        @app.default
+        async def myfunc(
+            input: Annotated[Path, INPUT_FILE],
+            output: Annotated[Path, OUTPUT_FILE],
+        ):
+            await asyncio.sleep(0)
+            output.write_text(input.read_text().upper())
+            return 10
+
+        result = run_with_record(
+            app,
+            dataset_license="CC-BY-4.0",
+            tokens=[str(input_file), str(output_file)],
+        )
+
+        assert result == 10
+        assert output_file.read_text() == "DATA"
+        assert_crate(
+            working_tmp_path,
+            expected_input_ids={"input.txt"},
+            expected_output_ids={"output.txt"},
+        )
+
+    def test_async_command_with_subcommand(self, working_tmp_path: Path):
+        """Test that async subcommands work correctly."""
+        input_file = working_tmp_path / "input.txt"
+        input_file.write_text("data")
+        output_file = working_tmp_path / "output.txt"
+
+        app = App(name="myapp", result_action="return_value", version="1.0.0")
+
+        @app.command
+        async def process(
+            input: Annotated[Path, INPUT_FILE],
+            output: Annotated[Path, OUTPUT_FILE],
+        ):
+            await asyncio.sleep(0)
+            output.write_text(input.read_text().upper())
+            return 10
+
+        result = run_with_record(
+            app,
+            dataset_license="CC-BY-4.0",
+            tokens=["process", str(input_file), str(output_file)],
+        )
+
+        assert result == 10
+        assert output_file.read_text() == "DATA"
+        assert_crate(
+            working_tmp_path,
+            expected_action_id=f"process {input_file} {output_file}",
+            expected_input_ids={"input.txt"},
+            expected_output_ids={"output.txt"},
+        )
+
+    def test_async_command_with_trigger_on(self, working_tmp_path: Path):
+        """Test that RECORD_TRIGGER works with async commands when trigger is True."""
+        input_file = working_tmp_path / "input.txt"
+        input_file.write_text("data")
+        output_file = working_tmp_path / "output.txt"
+
+        app = App(result_action="return_value", version="1.0.0")
+
+        @app.default
+        async def myfunc(
+            input: Annotated[Path, INPUT_FILE],
+            output: Annotated[Path, OUTPUT_FILE],
+            *,
+            prov: Annotated[bool, RECORD_TRIGGER] = False,
+        ):
+            await asyncio.sleep(0)
+            output.write_text(input.read_text().upper())
+            return 10
+
+        result = run_with_record(
+            app,
+            dataset_license="CC-BY-4.0",
+            tokens=["--prov", str(input_file), str(output_file)],
+        )
+
+        assert result == 10
+        assert output_file.read_text() == "DATA"
+        assert (working_tmp_path / "ro-crate-metadata.json").exists()
+
+    def test_async_command_with_trigger_off(self, working_tmp_path: Path):
+        """Test that RECORD_TRIGGER works with async commands when trigger is False."""
+        input_file = working_tmp_path / "input.txt"
+        input_file.write_text("data")
+        output_file = working_tmp_path / "output.txt"
+
+        app = App(result_action="return_value", version="1.0.0")
+
+        @app.default
+        async def myfunc(
+            input: Annotated[Path, INPUT_FILE],
+            output: Annotated[Path, OUTPUT_FILE],
+            *,
+            prov: Annotated[bool, RECORD_TRIGGER] = False,
+        ):
+            await asyncio.sleep(0)
+            output.write_text(input.read_text().upper())
+            return 10
+
+        result = run_with_record(
+            app,
+            dataset_license="CC-BY-4.0",
+            tokens=[str(input_file), str(output_file)],
+        )
+
+        assert result == 10
+        assert output_file.read_text() == "DATA"
+        assert not (working_tmp_path / "ro-crate-metadata.json").exists()
+
+
+class TestMetaApp:
+    def test_meta_app_with_record_trigger_at_meta_level(self, working_tmp_path: Path):
+        """Test meta app with RECORD_TRIGGER in meta command parameters.
+
+        When using meta apps, the trigger flag is parsed by the meta app,
+        which then forwards the appropriate tokens to the parent command.
+        This test demonstrates the meta app pattern where the meta command
+        can conditionally add flags to the forwarded tokens.
+        """
+        from cyclopts import Parameter
+
+        input_file = working_tmp_path / "input.txt"
+        input_file.write_text("data")
+        output_file = working_tmp_path / "output.txt"
+
+        app = App(result_action="return_value", version="1.0.0")
+
+        @app.default
+        def process(
+            input: Annotated[Path, INPUT_FILE],
+            output: Annotated[Path, OUTPUT_FILE],
+            *,
+            prov: Annotated[bool, RECORD_TRIGGER] = False,
+        ):
+            output.write_text(input.read_text().upper())
+            return 4
+
+        @app.meta.default
+        def meta(
+            *tokens: Annotated[str, Parameter(show=False, allow_leading_hyphen=True)],
+            prov: Annotated[bool, RECORD_TRIGGER] = False,
+        ):
+            tokens_list = list(tokens)
+            if prov:
+                tokens_list.append("--prov")
+            app(tokens_list)
+
+        # With trigger off (prov=False, default)
+        # The meta app receives tokens without --prov, so it doesn't add it
+        result = run_with_record(
+            app,
+            dataset_license="CC-BY-4.0",
+            tokens=[str(input_file), str(output_file)],
+        )
+        assert result == 4
+        assert not (working_tmp_path / "ro-crate-metadata.json").exists()
+
+        # With trigger on (prov=True)
+        # The meta app receives --prov, adds it to tokens, and the inner command
+        # sees it and triggers recording
+        run_with_record(
+            app,
+            dataset_license="CC-BY-4.0",
+            tokens=["--prov", str(input_file), str(output_file)],
+        )
+        assert (working_tmp_path / "ro-crate-metadata.json").exists()
+
+    def test_meta_app_with_record_trigger_at_inner_command_level(
+        self, working_tmp_path: Path
+    ):
+        """Test meta app with RECORD_TRIGGER in inner command."""
+        from cyclopts import Parameter
+
+        input_file = working_tmp_path / "input.txt"
+        input_file.write_text("data")
+        output_file = working_tmp_path / "output.txt"
+
+        app = App(result_action="return_value", version="1.0.0")
+
+        @app.default
+        def process(
+            input: Annotated[Path, INPUT_FILE],
+            output: Annotated[Path, OUTPUT_FILE],
+            *,
+            prov: Annotated[bool, RECORD_TRIGGER] = False,
+        ):
+            output.write_text(input.read_text().upper())
+            return 4
+
+        @app.meta.default
+        def meta(
+            *tokens: Annotated[str, Parameter(show=False, allow_leading_hyphen=True)],
+        ):
+            app(tokens)
+
+        # With trigger off
+        result = run_with_record(
+            app,
+            dataset_license="CC-BY-4.0",
+            tokens=[str(input_file), str(output_file)],
+        )
+        assert result == 4
+        assert not (working_tmp_path / "ro-crate-metadata.json").exists()
+
+        # With trigger on
+        run_with_record(
+            app,
+            dataset_license="CC-BY-4.0",
+            tokens=["--prov", str(input_file), str(output_file)],
+        )
+        assert (working_tmp_path / "ro-crate-metadata.json").exists()
+
+    def test_meta_app_with_subcommand(self, working_tmp_path: Path):
+        """Test meta app wrapping subcommands."""
+
+        input_file = working_tmp_path / "input.txt"
+        input_file.write_text("data")
+        output_file = working_tmp_path / "output.txt"
+
+        app = App(name="myapp", result_action="return_value", version="1.0.0")
+
+        @app.command
+        def process(
+            input: Annotated[Path, INPUT_FILE], output: Annotated[Path, OUTPUT_FILE]
+        ):
+            output.write_text(input.read_text().upper())
+            return 4
+
+        @app.meta.default
+        def meta(
+            *tokens: Annotated[str, Parameter(show=False, allow_leading_hyphen=True)],
+        ):
+            app(tokens)
+
+        result = run_with_record(
+            app,
+            dataset_license="CC-BY-4.0",
+            tokens=["process", str(input_file), str(output_file)],
+        )
+
+        assert result == 4
+        assert output_file.read_text() == "DATA"
+        assert_crate(
+            working_tmp_path,
+            expected_action_id=f"process {input_file} {output_file}",
+            expected_input_ids={"input.txt"},
+            expected_output_ids={"output.txt"},
+        )
+
+    def test_meta_app_with_subcommand_and_trigger(self, working_tmp_path: Path):
+        """Test meta app with subcommand that has RECORD_TRIGGER."""
+        # Remove inner imports
+        from cyclopts import Parameter
+
+        input_file = working_tmp_path / "input.txt"
+        input_file.write_text("data")
+        output_file = working_tmp_path / "output.txt"
+
+        app = App(name="myapp", result_action="return_value", version="1.0.0")
+
+        @app.command
+        def process(
+            input: Annotated[Path, INPUT_FILE],
+            output: Annotated[Path, OUTPUT_FILE],
+            *,
+            prov: Annotated[bool, RECORD_TRIGGER] = False,
+        ):
+            output.write_text(input.read_text().upper())
+            return 4
+
+        @app.meta.default
+        def meta(
+            *tokens: Annotated[str, Parameter(show=False, allow_leading_hyphen=True)],
+        ):
+            app(tokens)
+
+        # With trigger off
+        result = run_with_record(
+            app,
+            dataset_license="CC-BY-4.0",
+            tokens=["process", str(input_file), str(output_file)],
+        )
+        assert result == 4
+        assert not (working_tmp_path / "ro-crate-metadata.json").exists()
+
+        # With trigger on
+        run_with_record(
+            app,
+            dataset_license="CC-BY-4.0",
+            tokens=["process", "--prov", str(input_file), str(output_file)],
+        )
+        assert (working_tmp_path / "ro-crate-metadata.json").exists()
+
+    def test_meta_app_nested_meta(self, working_tmp_path: Path):
+        """Test nested meta apps (meta of meta)."""
+        from cyclopts import Parameter
+
+        input_file = working_tmp_path / "input.txt"
+        input_file.write_text("data")
+        output_file = working_tmp_path / "output.txt"
+
+        app = App(result_action="return_value", version="1.0.0")
+
+        @app.default
+        def process(
+            input: Annotated[Path, INPUT_FILE], output: Annotated[Path, OUTPUT_FILE]
+        ):
+            output.write_text(input.read_text().upper())
+            return 4
+
+        @app.meta.default
+        def meta(
+            *tokens: Annotated[str, Parameter(show=False, allow_leading_hyphen=True)],
+        ):
+            app(tokens)
+
+        @app.meta.meta.default
+        def meta_meta(
+            *tokens: Annotated[str, Parameter(show=False, allow_leading_hyphen=True)],
+        ):
+            app.meta(tokens)
+
+        result = run_with_record(
+            app,
+            dataset_license="CC-BY-4.0",
+            tokens=[str(input_file), str(output_file)],
+        )
+
+        assert result == 4
+        assert output_file.read_text() == "DATA"
+        assert_crate(
+            working_tmp_path,
+            expected_input_ids={"input.txt"},
+            expected_output_ids={"output.txt"},
+        )
+
+    def test_meta_app_with_meta_own_command(self, working_tmp_path: Path):
+        """Test meta app with its own command that doesn't call parent."""
+        from cyclopts import Parameter
+
+        output_file = working_tmp_path / "output.txt"
+
+        app = App(result_action="return_value", version="1.0.0")
+
+        @app.default
+        def process(
+            input: Annotated[Path, INPUT_FILE], output: Annotated[Path, OUTPUT_FILE]
+        ):
+            output.write_text(input.read_text().upper())
+            return 4
+
+        @app.meta.command
+        def info(output: Annotated[Path, OUTPUT_FILE]):
+            """Print info and write to output."""
+            output.write_text("info output")
+            return 11
+
+        @app.meta.default
+        def meta(
+            *tokens: Annotated[str, Parameter(show=False, allow_leading_hyphen=True)],
+        ):
+            app(tokens)
+
+        result = run_with_record(
+            app,
+            dataset_license="CC-BY-4.0",
+            tokens=["info", str(output_file)],
+        )
+
+        assert result == 11
+        assert output_file.read_text() == "info output"
+        assert_crate(
+            working_tmp_path,
+            expected_output_ids={"output.txt"},
+        )
+
+
+class TestHelpVersionCommands:
+    """Test that help and version commands work without IO markers."""
+
+    def test_help_flag_does_not_record(self, working_tmp_path: Path):
+        input_file = working_tmp_path / "input.txt"
+        input_file.write_text("hello")
+
+        app = App(result_action="return_value", version="1.0.0")
+
+        @app.default
+        def myfunc(
+            input: Annotated[Path, INPUT_FILE],
+            output: Annotated[Path, OUTPUT_FILE],
+        ):
+            return output.write_text(input.read_text().upper())
+
+        result = run_with_record(
+            app,
+            dataset_license="CC-BY-4.0",
+            tokens=["--help"],
+        )
+
+        assert result is None or result == 0
+        assert not (working_tmp_path / "ro-crate-metadata.json").exists()
+
+    def test_version_flag_does_not_record(self, working_tmp_path: Path):
+        input_file = working_tmp_path / "input.txt"
+        input_file.write_text("hello")
+
+        app = App(result_action="return_value", version="1.0.0")
+
+        @app.default
+        def myfunc(
+            input: Annotated[Path, INPUT_FILE],
+            output: Annotated[Path, OUTPUT_FILE],
+        ):
+            return output.write_text(input.read_text().upper())
+
+        result = run_with_record(
+            app,
+            dataset_license="CC-BY-4.0",
+            tokens=["--version"],
+        )
+
+        assert result is None or result == 0
+        assert not (working_tmp_path / "ro-crate-metadata.json").exists()
+
+    def test_subcommand_help_does_not_record(self, working_tmp_path: Path):
+        input_file = working_tmp_path / "input.txt"
+        input_file.write_text("hello")
+
+        app = App(name="myapp", result_action="return_value", version="1.0.0")
+
+        @app.command
+        def process(
+            input: Annotated[Path, INPUT_FILE],
+            output: Annotated[Path, OUTPUT_FILE],
+        ):
+            """Process files."""
+            return output.write_text(input.read_text().upper())
+
+        result = run_with_record(
+            app,
+            dataset_license="CC-BY-4.0",
+            tokens=["process", "--help"],
+        )
+
+        assert result is None or result == 0
+        assert not (working_tmp_path / "ro-crate-metadata.json").exists()
 
 
 class Test_cyclopts_value2paths:

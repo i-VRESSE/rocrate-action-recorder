@@ -4,16 +4,18 @@ from collections.abc import Callable
 from typing import Any
 
 from rocrate_action_recorder.adapters.argparse import (
+    IOArgumentNames,
     record_argparse,
     recorded_argparse,
-    IOArgumentNames,
 )
 
 try:
     from rocrate_action_recorder.adapters.click import (
+        IOArgumentNames as ClickIOArgumentNames,
+    )
+    from rocrate_action_recorder.adapters.click import (
         record_click,
         recorded_click,
-        IOArgumentNames as ClickIOArgumentNames,
     )
 except ModuleNotFoundError as exc:
     if exc.name != "click":
@@ -31,8 +33,8 @@ from rocrate_action_recorder.core import (
     IOArgumentPath,
     IOArgumentPaths,
     Program,
-    record,
     playback,
+    record,
 )
 
 __all__ = [

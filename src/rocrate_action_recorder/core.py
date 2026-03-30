@@ -1,25 +1,25 @@
 """Core functionality for recording CLI invocations in RO-Crate format."""
 
-from dataclasses import dataclass, field
-from datetime import UTC, datetime
 import getpass
 import importlib.metadata
 import inspect
+import logging
 import mimetypes
 import os
 import pwd
-from pathlib import Path
 import shutil
 import subprocess
 import sys
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from pathlib import Path
 from shlex import quote
-import logging
 
 from rocrate.model import File
+from rocrate.model.creativework import CreativeWork
 from rocrate.model.dataset import Dataset
 from rocrate.model.person import Person
-from rocrate.model.creativework import CreativeWork
-from rocrate.rocrate import Entity, ROCrate, SoftwareApplication, Metadata
+from rocrate.rocrate import Entity, Metadata, ROCrate, SoftwareApplication
 
 logger = logging.getLogger(__name__)
 

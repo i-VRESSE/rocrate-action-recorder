@@ -1,13 +1,12 @@
-from datetime import UTC, datetime
 import importlib.metadata
 import json
-from pathlib import Path
 import subprocess
+from datetime import UTC, datetime
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
-
-from pytest import LogCaptureFixture
 import pytest
+from pytest import LogCaptureFixture
 
 from rocrate_action_recorder.core import (
     IOArgumentPath,

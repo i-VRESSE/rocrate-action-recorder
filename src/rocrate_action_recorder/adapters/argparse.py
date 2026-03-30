@@ -1,22 +1,23 @@
 """Adapter for argparse CLI framework."""
 
-from argparse import _VersionAction, ArgumentParser, Namespace
+import logging
+from argparse import ArgumentParser, Namespace, _VersionAction
 from collections.abc import Callable
 from datetime import UTC, datetime
 from functools import wraps
 from pathlib import Path
 from typing import Any
-import logging
 
 from rocrate_action_recorder.adapters.shared import (
     IOArgumentNames,
-    try_convert_to_path as shared_try_convert_to_path,
     value2paths,
 )
-
+from rocrate_action_recorder.adapters.shared import (
+    try_convert_to_path as shared_try_convert_to_path,
+)
 from rocrate_action_recorder.core import (
-    IOArgumentPaths,
     IOArgumentPath,
+    IOArgumentPaths,
     Program,
     record,
 )

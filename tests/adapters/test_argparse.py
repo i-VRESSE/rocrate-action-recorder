@@ -1,19 +1,19 @@
 from argparse import ArgumentParser, FileType, Namespace
 from pathlib import Path
 
-from rocrate.rocrate import Metadata
 import pytest
+from rocrate.rocrate import Metadata
 
 from rocrate_action_recorder.adapters.argparse import (
-    version_from_parser,
-    collect_record_info_from_argparse,
     IOArgumentNames,
     MissingDestArgparseSubparserError,
+    collect_record_info_from_argparse,
     recorded_argparse,
+    version_from_parser,
 )
 from rocrate_action_recorder.core import (
-    IOArgumentPaths,
     IOArgumentPath,
+    IOArgumentPaths,
     Program,
 )
 

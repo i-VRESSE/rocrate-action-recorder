@@ -1,24 +1,26 @@
 """Adapter for Click CLI framework."""
 
+import logging
 from collections.abc import Callable
 from datetime import UTC, datetime
 from functools import wraps
 from pathlib import Path
 from typing import Any
-import logging
 
 import click
 
+from rocrate_action_recorder.adapters.shared import (
+    IOArgumentNames,
+    value2paths,
+)
+from rocrate_action_recorder.adapters.shared import (
+    try_convert_to_path as shared_try_convert_to_path,
+)
 from rocrate_action_recorder.core import (
     IOArgumentPath,
     IOArgumentPaths,
     Program,
     record,
-)
-from rocrate_action_recorder.adapters.shared import (
-    IOArgumentNames,
-    try_convert_to_path as shared_try_convert_to_path,
-    value2paths,
 )
 
 logger = logging.getLogger(__name__)

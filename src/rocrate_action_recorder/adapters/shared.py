@@ -1,9 +1,9 @@
 """Shared helpers for CLI framework adapters."""
 
+import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -45,8 +45,23 @@ def try_convert_to_path(item: Any) -> Path | None:
     return Path(item)
 
 
+def _flatten_nested_tuples(value: Any) -> list[Any]:
+    """Flatten nested tuples recursively."""
+    result: list[Any] = []
+    if isinstance(value, tuple):
+        for item in value:
+            result.extend(_flatten_nested_tuples(item))
+    else:
+        result.append(value)
+    return result
+
+
 def value2paths(value: Any) -> list[Path]:
     """Convert a value to a list of deduplicated Path objects."""
+    # Flatten nested tuples (e.g., from Cyclopts *args: ((Path1,), (Path2,)))
+    if isinstance(value, tuple):
+        value = _flatten_nested_tuples(value)
+
     paths: list[Path] = []
     if isinstance(value, (list, tuple)):
         for item in value:

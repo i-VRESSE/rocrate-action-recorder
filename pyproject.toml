@@ -49,8 +49,12 @@ typecheck = [
 test = [
   "click>=8.1.0",
     "pytest>=9.0.2",
+    "pytest-asyncio>=0.21.0",
     "pytest-cov>=7.0.0",
     "roc-validator>=0.8.0",
+    "cyclopts>=4.10.1",
+    "pydantic>=2.0.0",
+    "attrs>=24.0.0",
 ]
 docs = [
     "sphinx>=9.1.0",
