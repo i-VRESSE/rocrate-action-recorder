@@ -7,7 +7,7 @@ from typing import Annotated, NamedTuple
 
 from attrs import define
 import pytest
-from cyclopts import App, Group, Parameter
+from cyclopts import App, Group, MissingArgumentError, Parameter
 from cyclopts.types import (
     NonExistentFile,
     StdioPath,
@@ -114,6 +114,24 @@ class TestMarkerless:
 
         with record_cyclopts(app, tokens=["--version"]):
             app(tokens=["--version"])
+
+        assert_no_crate(working_tmp_path)
+
+    def test_noargs(self, working_tmp_path: Path):
+        app = App(
+            result_action="return_value",
+            version="1.0.0",
+            exit_on_error=False,
+            help_on_error=True,
+        )
+
+        @app.default
+        def main(something: str):
+            pass
+
+        with pytest.raises(MissingArgumentError):
+            with record_cyclopts(app, tokens=""):
+                app(tokens="")
 
         assert_no_crate(working_tmp_path)
 
