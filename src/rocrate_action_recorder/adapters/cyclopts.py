@@ -686,6 +686,16 @@ def _parse_tokens(tokens: str | Iterable[str] | None = None) -> list[str]:
     return list(tokens)
 
 
+def _is_successful_system_exit(error: SystemExit) -> bool:
+    """Return whether a SystemExit represents a successful exit."""
+    code = error.code
+    if code is None:
+        return True
+    if isinstance(code, int):
+        return code == 0
+    return False
+
+
 @dataclass
 class Info:
     program: Program
@@ -768,17 +778,25 @@ def record_cyclopts(
     start_time = datetime.now(tz=UTC)
     info = collect_info(app, tokens, software_version=software_version)
 
-    yield app
-
-    end_time = datetime.now(tz=UTC)
-    if info.should_record:
-        record(
-            program=info.program,
-            ioargs=info.ioargs,
-            start_time=start_time,
-            crate_dir=crate_dir,
-            argv=[info.program.name] + (info.argv or []),
-            end_time=end_time,
-            current_user=current_user,
-            dataset_license=dataset_license,
-        )
+    try:
+        yield app
+    except SystemExit as error:
+        if not _is_successful_system_exit(error):
+            info.should_record = False
+            raise
+    except Exception:
+        info.should_record = False
+        raise
+    finally:
+        if info.should_record:
+            end_time = datetime.now(tz=UTC)
+            record(
+                program=info.program,
+                ioargs=info.ioargs,
+                start_time=start_time,
+                crate_dir=crate_dir,
+                argv=[info.program.name] + (info.argv or []),
+                end_time=end_time,
+                current_user=current_user,
+                dataset_license=dataset_license,
+            )

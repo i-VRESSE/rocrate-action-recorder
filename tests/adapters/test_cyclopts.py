@@ -1,5 +1,6 @@
 import asyncio
 import sys
+from collections.abc import Callable
 from io import BytesIO, TextIOWrapper
 from textwrap import dedent
 from dataclasses import dataclass
@@ -9,7 +10,7 @@ from typing import Annotated
 
 from attrs import define
 import pytest
-from cyclopts import App, Group, MissingArgumentError, Parameter
+from cyclopts import App, Group, MissingArgumentError, Parameter, ResultAction
 from cyclopts.types import (
     NonExistentFile,
     StdioPath,
@@ -50,7 +51,6 @@ def assert_crate(
     crate_path = crate_dir / Metadata.BASENAME
     assert crate_path.exists()
 
-    print(crate_path.read_text())
     crate = ROCrate(crate_dir)
     actions = crate.get_by_type("CreateAction", exact=True)
     assert len(actions) == 1, (
@@ -77,6 +77,9 @@ def assert_crate(
 
 @pytest.fixture
 def working_tmp_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    # record will write crate file in cwd,
+    # so make sure we are in the test directory
+    # and not in repo root
     monkeypatch.chdir(tmp_path)
     return tmp_path
 
@@ -84,7 +87,7 @@ def working_tmp_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 @pytest.fixture
 def lazy_module():
     """Fixture that provides a helper to create lazy-loadable test modules.
-    
+
     Copy of https://github.com/BrianPugh/cyclopts/blob/2cbfbb2af31ac240e01d24177155d6fd925037d2/tests/test_lazy_commands.py#L15-L40
     """
     created_modules: list[str] = []
@@ -273,6 +276,181 @@ class TestMarkerless:
 
         _, action = assert_crate(working_tmp_path, action_id="main")
         assert action["agent"]["@id"] == "alice"
+
+
+# Helper functions for testing different result actions
+def do_str() -> str:
+    return "RESULT"
+
+
+def do_int_zero() -> int:
+    return 0
+
+
+def do_int_one() -> int:
+    return 1
+
+
+def do_false() -> bool:
+    return False
+
+
+def do_callable() -> Callable[[], str]:
+    return lambda: "CALLED"
+
+
+def do_system_exit_one() -> None:
+    raise SystemExit(1)
+
+
+def do_value_error() -> None:
+    raise ValueError("Bad value")
+
+
+class TestResultAction:
+    def app_with_result_action(
+        self, result_action: ResultAction, do: Callable[[], object]
+    ) -> App:
+        app = App(result_action=result_action, version="1.0.0")
+
+        @app.default
+        def main() -> object:
+            return do()
+
+        return app
+
+    @pytest.mark.parametrize(
+        "result_action,do,expected_output",
+        [
+            ("return_value", do_str, None),
+            ("call_if_callable", do_callable, None),
+            ("print_non_int_return_int_as_exit_code", do_str, "RESULT"),
+            ("print_str_return_int_as_exit_code", do_str, "RESULT"),
+            ("print_str_return_zero", do_str, "RESULT"),
+            ("print_non_none_return_int_as_exit_code", do_str, "RESULT"),
+            ("print_non_none_return_zero", do_str, "RESULT"),
+            ("return_int_as_exit_code_else_zero", do_int_one, None),
+            ("print_non_int_sys_exit", do_str, "RESULT"),
+            ("sys_exit", do_int_zero, None),
+            ("return_none", do_str, None),
+            ("return_zero", do_str, None),
+            ("print_return_zero", do_str, "RESULT"),
+            ("sys_exit_zero", do_str, None),
+            ("print_sys_exit_zero", do_str, "RESULT"),
+        ],
+        ids=[
+            "return_value",
+            "call_if_callable",
+            "print_non_int_return_int_as_exit_code",
+            "print_str_return_int_as_exit_code",
+            "print_str_return_zero",
+            "print_non_none_return_int_as_exit_code",
+            "print_non_none_return_zero",
+            "return_int_as_exit_code_else_zero",
+            "print_non_int_sys_exit",
+            "sys_exit",
+            "return_none",
+            "return_zero",
+            "print_return_zero",
+            "sys_exit_zero",
+            "print_sys_exit_zero",
+        ],
+    )
+    def test_builtin_result_actions(
+        self,
+        result_action: ResultAction,
+        do: Callable[[], object],
+        expected_output: str | None,
+        working_tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ):
+        app = self.app_with_result_action(result_action, do)
+        tokens = ""
+
+        with record_cyclopts(app, tokens=tokens):
+            app(tokens=tokens)
+
+        captured = capsys.readouterr()
+        if expected_output is not None:
+            assert expected_output in captured.out
+
+        assert_crate(working_tmp_path, action_id="main")
+
+    @pytest.mark.parametrize(
+        "result_action,do,expected_exit_code",
+        [
+            ("sys_exit", do_int_one, 1),
+            ("sys_exit", do_false, 1),
+            ("print_non_int_sys_exit", do_int_one, 1),
+            ("print_non_int_sys_exit", do_false, 1),
+        ],
+        ids=[
+            "sys_exit_int_1",
+            "sys_exit_false",
+            "print_non_int_sys_exit_int_1",
+            "print_non_int_sys_exit_false",
+        ],
+    )
+    def test_nonzero_exit_does_not_record(
+        self,
+        result_action: ResultAction,
+        do: Callable[[], object],
+        expected_exit_code: int,
+        working_tmp_path: Path,
+    ):
+        app = self.app_with_result_action(result_action, do)
+        tokens = ""
+
+        with pytest.raises(SystemExit) as exc_info:
+            with record_cyclopts(app, tokens=tokens):
+                app(tokens=tokens)
+        assert exc_info.value.code == expected_exit_code
+
+        assert_no_crate(working_tmp_path)
+
+    def test_nonzero_system_exit_propagates(self, working_tmp_path: Path):
+        app = self.app_with_result_action("sys_exit", do_system_exit_one)
+        tokens = ""
+
+        with pytest.raises(SystemExit, match="1"):
+            with record_cyclopts(app, tokens=tokens):
+                app(tokens=tokens)
+
+        assert_no_crate(working_tmp_path)
+
+    @pytest.mark.parametrize(
+        "result_action",
+        [
+            "return_value",
+            "call_if_callable",
+            "print_non_int_return_int_as_exit_code",
+            "print_str_return_int_as_exit_code",
+            "print_str_return_zero",
+            "print_non_none_return_int_as_exit_code",
+            "print_non_none_return_zero",
+            "return_int_as_exit_code_else_zero",
+            "print_non_int_sys_exit",
+            "sys_exit",
+            "return_none",
+            "return_zero",
+            "print_return_zero",
+            "sys_exit_zero",
+            "print_sys_exit_zero",
+        ],
+    )
+    def test_nonsystemexiterror_propagates(
+        self,
+        result_action: ResultAction,
+        working_tmp_path: Path,
+    ):
+        app = self.app_with_result_action(result_action, do_value_error)
+        tokens = ""
+
+        with pytest.raises(ValueError, match="Bad value"):
+            with record_cyclopts(app, tokens=tokens):
+                app(tokens=tokens)
+
+        assert_no_crate(working_tmp_path)
 
 
 class TestTrigger:

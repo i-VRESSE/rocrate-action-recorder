@@ -1,7 +1,7 @@
 Calling the script with
 
 ```shell
-./myscript.py data/input.txt output.txt
+./myscript.py --prov data/input.txt output.txt
 ```
 
 Would generate a [ro-crate-metadata.json](ro-crate-metadata.json) file.

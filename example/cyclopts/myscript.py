@@ -19,6 +19,7 @@ app = App(
 
 @app.default
 def main(
+    # Could have used cyclopts.types.ExistingFile, but use Path for simplicity
     input: Annotated[Path, INPUT_FILE],
     output: Annotated[Path, OUTPUT_FILE],
     /,
