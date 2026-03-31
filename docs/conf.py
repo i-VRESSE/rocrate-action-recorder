@@ -75,7 +75,7 @@ always_document_param_types = True
 autoapi_dirs = ["../src/rocrate_action_recorder"]
 
 
-# TODO move to own package
+# TODO move to own package for example sphinx-github-linkcode
 # Link to source on GitHub for objects documented by Sphinx's linkcode extension.
 # Implements the contract described at:
 # https://www.sphinx-doc.org/en/master/usage/extensions/linkcode.html
