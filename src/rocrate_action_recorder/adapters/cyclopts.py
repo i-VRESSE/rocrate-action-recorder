@@ -1,11 +1,11 @@
 """Adapter for Cyclopts CLI framework."""
 
-from collections.abc import Generator, Iterable
-from contextlib import contextmanager
 import inspect
 import logging
 import shlex
 import sys
+from collections.abc import Generator, Iterable
+from contextlib import contextmanager
 from dataclasses import dataclass, is_dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -18,8 +18,6 @@ from cyclopts.help.inline_text import InlineText
 
 from rocrate_action_recorder.adapters.shared import (
     IOArgumentNames,
-)
-from rocrate_action_recorder.adapters.shared import (
     value2paths,
 )
 from rocrate_action_recorder.core import (
@@ -62,9 +60,7 @@ _MARKER_TO_CATEGORY: dict[str, str] = {
 }
 
 
-def _collect_subcommands(
-    app: App, parent_name: str, seen: set[str] | None = None
-) -> dict[str, Program]:
+def _collect_subcommands(app: App, parent_name: str, seen: set[str] | None = None) -> dict[str, Program]:
     """Recursively collect all subcommands from a Cyclopts App.
 
     Args:
@@ -86,20 +82,14 @@ def _collect_subcommands(
         ):
             continue
 
-        sub_app_name = (
-            " ".join(sub_app.name)
-            if isinstance(sub_app.name, tuple)
-            else (sub_app.name or "")
-        )
+        sub_app_name = " ".join(sub_app.name) if isinstance(sub_app.name, tuple) else (sub_app.name or "")
         cmd_name = sub_app_name
 
         # Check if this sub_app has a default command that is a function
         if sub_app.default_command and inspect.isfunction(sub_app.default_command):
             subversion = None
             if sub_app.version:
-                subversion_str = (
-                    sub_app.version() if callable(sub_app.version) else sub_app.version
-                )
+                subversion_str = sub_app.version() if callable(sub_app.version) else sub_app.version
                 if subversion_str is not None:
                     subversion = str(subversion_str)
             full_name = f"{parent_name} {cmd_name}".strip() if parent_name else cmd_name
@@ -150,9 +140,7 @@ def program_from_app(app: App) -> Program:
 
     description = _plaintext_doc(app)
 
-    parent_name = (
-        " ".join(app.name) if isinstance(app.name, tuple) else (app.name or "")
-    )
+    parent_name = " ".join(app.name) if isinstance(app.name, tuple) else (app.name or "")
     program = Program(
         name=parent_name,
         description=description,
@@ -214,14 +202,10 @@ def _search_argument_value(value: Any, field_name: str) -> Any | None:
         # Pydantic models have __fields__ (Pydantic v1) or model_fields (Pydantic v2)
         # Access from class to avoid deprecation warning in Pydantic v2.11+
         model_cls = type(value)
-        fields = getattr(model_cls, "model_fields", None) or getattr(
-            model_cls, "__fields__", None
-        )
+        fields = getattr(model_cls, "model_fields", None) or getattr(model_cls, "__fields__", None)
         if fields:
             for nested_name in fields:
-                resolved = _search_argument_value(
-                    getattr(value, nested_name), field_name
-                )
+                resolved = _search_argument_value(getattr(value, nested_name), field_name)
                 if resolved is not None:
                     return resolved
         return None
@@ -233,9 +217,7 @@ def _search_argument_value(value: Any, field_name: str) -> Any | None:
         if attrs_attrs:
             for attr in attrs_attrs:
                 nested_name = attr.name
-                resolved = _search_argument_value(
-                    getattr(value, nested_name), field_name
-                )
+                resolved = _search_argument_value(getattr(value, nested_name), field_name)
                 if resolved is not None:
                     return resolved
         return None
@@ -336,25 +318,17 @@ def _resolve_io_argument_paths(
     for name in names:
         info = name_info.get(name)
         if info is None:
-            logger.warning(
-                f"Argument name '{name}' does not exist in parsed Cyclopts args."
-            )
+            logger.warning(f"Argument name '{name}' does not exist in parsed Cyclopts args.")
             continue
         field_name, help_text = info
         value = _lookup_argument_value(arguments, field_name)
         if value is None:
-            logger.warning(
-                f"Argument name '{name}' does not exist in parsed Cyclopts args."
-            )
+            logger.warning(f"Argument name '{name}' does not exist in parsed Cyclopts args.")
             continue
         paths = value2paths(value)
         if not paths:
-            logger.warning(
-                f"Argument name '{name}' has no associated path-like argument value(s)."
-            )
-        result.extend(
-            IOArgumentPath(name=name, path=path, help=help_text) for path in paths
-        )
+            logger.warning(f"Argument name '{name}' has no associated path-like argument value(s).")
+        result.extend(IOArgumentPath(name=name, path=path, help=help_text) for path in paths)
     return result
 
 
@@ -383,25 +357,15 @@ def _collect_ioargs(
         name_info[name] = (field_name, help_text)
 
     ioargs = IOArgumentPaths(
-        input_files=_resolve_io_argument_paths(
-            ios.input_files, name_info, bound_args.arguments
-        ),
-        output_files=_resolve_io_argument_paths(
-            ios.output_files, name_info, bound_args.arguments
-        ),
-        input_dirs=_resolve_io_argument_paths(
-            ios.input_dirs, name_info, bound_args.arguments
-        ),
-        output_dirs=_resolve_io_argument_paths(
-            ios.output_dirs, name_info, bound_args.arguments
-        ),
+        input_files=_resolve_io_argument_paths(ios.input_files, name_info, bound_args.arguments),
+        output_files=_resolve_io_argument_paths(ios.output_files, name_info, bound_args.arguments),
+        input_dirs=_resolve_io_argument_paths(ios.input_dirs, name_info, bound_args.arguments),
+        output_dirs=_resolve_io_argument_paths(ios.output_dirs, name_info, bound_args.arguments),
     )
     return ioargs
 
 
-def _extract_markers_from_pydantic_fields(
-    model_cls: Any, prefix: str = ""
-) -> list[tuple[str, str]]:
+def _extract_markers_from_pydantic_fields(model_cls: Any, prefix: str = "") -> list[tuple[str, str]]:
     """Extract markers from Pydantic model fields.
 
     Args:
@@ -412,9 +376,7 @@ def _extract_markers_from_pydantic_fields(
         List of (field_path, marker) tuples.
     """
     markers: list[tuple[str, str]] = []
-    fields = getattr(model_cls, "model_fields", None) or getattr(
-        model_cls, "__fields__", None
-    )
+    fields = getattr(model_cls, "model_fields", None) or getattr(model_cls, "__fields__", None)
     if not fields:
         return markers
 
@@ -434,9 +396,7 @@ def _extract_markers_from_pydantic_fields(
     return markers
 
 
-def _extract_markers_from_attrs_fields(
-    attrs_cls: Any, prefix: str = ""
-) -> list[tuple[str, str]]:
+def _extract_markers_from_attrs_fields(attrs_cls: Any, prefix: str = "") -> list[tuple[str, str]]:
     """Extract markers from attrs class fields.
 
     Args:
@@ -716,9 +676,7 @@ def collect_info(
     argv = _parse_tokens(tokens)
     command, bound_args, _ = app.parse_args(argv)
     executed_app = _resolve_executed_subapp(app, command) or app
-    argument_collection = executed_app.assemble_argument_collection(
-        parse_docstring=True
-    )
+    argument_collection = executed_app.assemble_argument_collection(parse_docstring=True)
     meta_argument_collection = None
     if hasattr(app.meta, "default_command") and app.meta.default_command:
         meta_argument_collection = app.meta.assemble_argument_collection()
@@ -736,9 +694,7 @@ def collect_info(
         app.install_completion,
     )
     if is_builtin_command:
-        return Info(
-            program=program, ioargs=IOArgumentPaths(), should_record=False, argv=argv
-        )
+        return Info(program=program, ioargs=IOArgumentPaths(), should_record=False, argv=argv)
 
     should_record = _should_record(bound_args, record_trigger_name)
     ioargs = _collect_ioargs(

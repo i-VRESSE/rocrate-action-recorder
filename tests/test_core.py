@@ -119,9 +119,7 @@ def test_detect_software_version_scriptsameaspackage():
 def test_detect_software_version_localscript(tmp_path: Path):
     # Create a dummy executable file
     exe_file = tmp_path / "dummy_executable.py"
-    exe_file.write_text(
-        "#!/usr/bin/env python\nimport sys\nif '--version' in sys.argv:\n    print('v4.2')\n"
-    )
+    exe_file.write_text("#!/usr/bin/env python\nimport sys\nif '--version' in sys.argv:\n    print('v4.2')\n")
     exe_file.chmod(0o755)
 
     result = detect_software_version(str(exe_file))
@@ -333,9 +331,7 @@ class Test_record:
         end_time = datetime(2026, 1, 28, 11, 42, 38, 0)
 
         record(
-            program=Program(
-                name="test_program", description="Test program", version="1.0.0"
-            ),
+            program=Program(name="test_program", description="Test program", version="1.0.0"),
             ioargs=IOArgumentPaths(),
             argv=["test_program"],
             current_user="test_user",
@@ -350,8 +346,7 @@ class Test_record:
 
         assert len(issues) == 1
         assert (
-            "The Root Data Entity MUST have a `license` property (as specified by schema./org)."
-            in issues[0]["message"]
+            "The Root Data Entity MUST have a `license` property (as specified by schema./org)." in issues[0]["message"]
         )
 
     def test_1inputfile_1outputfile_absolute_paths(self, tmp_path: Path):
@@ -372,16 +367,10 @@ class Test_record:
         end_time = datetime(2026, 1, 16, 12, 0, 5, tzinfo=UTC)
 
         crate_meta = record(
-            program=Program(
-                name="myscript", description="My test script", version="1.2.3"
-            ),
+            program=Program(name="myscript", description="My test script", version="1.2.3"),
             ioargs=IOArgumentPaths(
-                input_files=[
-                    IOArgumentPath(name="input", path=input_path, help="Input file")
-                ],
-                output_files=[
-                    IOArgumentPath(name="output", path=output_path, help="Output file")
-                ],
+                input_files=[IOArgumentPath(name="input", path=input_path, help="Input file")],
+                output_files=[IOArgumentPath(name="output", path=output_path, help="Output file")],
             ),
             argv=argv,
             current_user="tester",
@@ -451,13 +440,9 @@ class Test_record:
         end_time = datetime(2026, 1, 16, 12, 0, 5, tzinfo=UTC)
 
         crate_meta = record(
-            program=Program(
-                name="myscript", description="My test script", version="1.2.3"
-            ),
+            program=Program(name="myscript", description="My test script", version="1.2.3"),
             ioargs=IOArgumentPaths(
-                input_files=[
-                    IOArgumentPath(name="input", path=input_path, help="Input file")
-                ],
+                input_files=[IOArgumentPath(name="input", path=input_path, help="Input file")],
             ),
             argv=argv,
             current_user="tester",
@@ -520,16 +505,10 @@ class Test_record:
         ]
 
         record(
-            program=Program(
-                name="myscript", description="My test script", version="1.2.3"
-            ),
+            program=Program(name="myscript", description="My test script", version="1.2.3"),
             ioargs=IOArgumentPaths(
-                input_files=[
-                    IOArgumentPath(name="input", path=input_path1, help="Input file")
-                ],
-                output_files=[
-                    IOArgumentPath(name="output", path=output_path1, help="Output file")
-                ],
+                input_files=[IOArgumentPath(name="input", path=input_path1, help="Input file")],
+                output_files=[IOArgumentPath(name="output", path=output_path1, help="Output file")],
             ),
             argv=argv1,
             current_user="tester",
@@ -554,16 +533,10 @@ class Test_record:
         start_time2 = datetime(2026, 1, 16, 12, 10, 0, tzinfo=UTC)
         end_time2 = datetime(2026, 1, 16, 12, 10, 7, tzinfo=UTC)
         crate_meta = record(
-            program=Program(
-                name="myscript", description="My test script", version="1.2.3"
-            ),
+            program=Program(name="myscript", description="My test script", version="1.2.3"),
             ioargs=IOArgumentPaths(
-                input_files=[
-                    IOArgumentPath(name="input", path=input_path2, help="Input file")
-                ],
-                output_files=[
-                    IOArgumentPath(name="output", path=output_path2, help="Output file")
-                ],
+                input_files=[IOArgumentPath(name="input", path=input_path2, help="Input file")],
+                output_files=[IOArgumentPath(name="output", path=output_path2, help="Output file")],
             ),
             argv=argv2,
             current_user="tester",
@@ -693,16 +666,10 @@ class Test_record:
         ]
 
         record(
-            program=Program(
-                name="myscript", description="My test script", version="1.2.3"
-            ),
+            program=Program(name="myscript", description="My test script", version="1.2.3"),
             ioargs=IOArgumentPaths(
-                input_files=[
-                    IOArgumentPath(name="input", path=input_path, help="Input file")
-                ],
-                output_files=[
-                    IOArgumentPath(name="output", path=output_path1, help="Output file")
-                ],
+                input_files=[IOArgumentPath(name="input", path=input_path, help="Input file")],
+                output_files=[IOArgumentPath(name="output", path=output_path1, help="Output file")],
             ),
             argv=argv1,
             current_user="tester",
@@ -725,16 +692,10 @@ class Test_record:
         start_time2 = datetime(2026, 1, 16, 12, 10, 0, tzinfo=UTC)
         end_time2 = datetime(2026, 1, 16, 12, 10, 7, tzinfo=UTC)
         crate_meta = record(
-            program=Program(
-                name="myscript", description="My test script", version="1.2.3"
-            ),
+            program=Program(name="myscript", description="My test script", version="1.2.3"),
             ioargs=IOArgumentPaths(
-                input_files=[
-                    IOArgumentPath(name="input", path=input_path, help="Input file")
-                ],
-                output_files=[
-                    IOArgumentPath(name="output", path=output_path2, help="Output file")
-                ],
+                input_files=[IOArgumentPath(name="input", path=input_path, help="Input file")],
+                output_files=[IOArgumentPath(name="output", path=output_path2, help="Output file")],
             ),
             argv=argv2,
             current_user="tester",
@@ -895,16 +856,10 @@ class Test_record:
         ]
 
         record(
-            program=Program(
-                name="myscript", description="My test script", version="1.2.3"
-            ),
+            program=Program(name="myscript", description="My test script", version="1.2.3"),
             ioargs=IOArgumentPaths(
-                input_files=[
-                    IOArgumentPath(name="input", path=input_path, help="Input file")
-                ],
-                output_files=[
-                    IOArgumentPath(name="output", path=output_path1, help="Output file")
-                ],
+                input_files=[IOArgumentPath(name="input", path=input_path, help="Input file")],
+                output_files=[IOArgumentPath(name="output", path=output_path1, help="Output file")],
             ),
             argv=argv,
             current_user="tester",
@@ -920,16 +875,10 @@ class Test_record:
         start_time2 = datetime(2026, 1, 16, 12, 10, 0, tzinfo=UTC)
         end_time2 = datetime(2026, 1, 16, 12, 10, 7, tzinfo=UTC)
         crate_meta = record(
-            program=Program(
-                name="myscript", description="My test script", version="1.2.3"
-            ),
+            program=Program(name="myscript", description="My test script", version="1.2.3"),
             ioargs=IOArgumentPaths(
-                input_files=[
-                    IOArgumentPath(name="input", path=input_path, help="Input file")
-                ],
-                output_files=[
-                    IOArgumentPath(name="output", path=output_path2, help="Output file")
-                ],
+                input_files=[IOArgumentPath(name="input", path=input_path, help="Input file")],
+                output_files=[IOArgumentPath(name="output", path=output_path2, help="Output file")],
             ),
             argv=argv,
             current_user="tester",
@@ -1038,16 +987,10 @@ class Test_record:
         ]
 
         record(
-            program=Program(
-                name="myscript", description="My test script", version="1.2.3"
-            ),
+            program=Program(name="myscript", description="My test script", version="1.2.3"),
             ioargs=IOArgumentPaths(
-                input_files=[
-                    IOArgumentPath(name="input", path=input_path, help="Input file")
-                ],
-                output_files=[
-                    IOArgumentPath(name="output", path=output_path1, help="Output file")
-                ],
+                input_files=[IOArgumentPath(name="input", path=input_path, help="Input file")],
+                output_files=[IOArgumentPath(name="output", path=output_path1, help="Output file")],
             ),
             argv=argv1,
             current_user="tester",
@@ -1071,16 +1014,10 @@ class Test_record:
         ]
 
         crate_meta = record(
-            program=Program(
-                name="myscript", description="My test script", version="2.0.0"
-            ),
+            program=Program(name="myscript", description="My test script", version="2.0.0"),
             ioargs=IOArgumentPaths(
-                input_files=[
-                    IOArgumentPath(name="input", path=input_path, help="Input file")
-                ],
-                output_files=[
-                    IOArgumentPath(name="output", path=output_path2, help="Output file")
-                ],
+                input_files=[IOArgumentPath(name="input", path=input_path, help="Input file")],
+                output_files=[IOArgumentPath(name="output", path=output_path2, help="Output file")],
             ),
             argv=argv2,
             current_user="tester",
@@ -1203,13 +1140,9 @@ class Test_record:
         ]
 
         record(
-            program=Program(
-                name="myscript", description="My test script", version="1.2.3"
-            ),
+            program=Program(name="myscript", description="My test script", version="1.2.3"),
             ioargs=IOArgumentPaths(
-                input_files=[
-                    IOArgumentPath(name="input", path=input_path, help="Input file")
-                ],
+                input_files=[IOArgumentPath(name="input", path=input_path, help="Input file")],
             ),
             argv=argv,
             current_user="tester",
@@ -1231,9 +1164,7 @@ class Test_record:
                 version="0.9.8",
             ),
             ioargs=IOArgumentPaths(
-                input_files=[
-                    IOArgumentPath(name="input", path=input_path2, help="Input file")
-                ],
+                input_files=[IOArgumentPath(name="input", path=input_path2, help="Input file")],
             ),
             argv=[
                 "myotherscript",
@@ -1348,20 +1279,10 @@ class Test_record:
         end_time = datetime(2026, 1, 16, 12, 0, 5, tzinfo=UTC)
 
         crate_meta = record(
-            program=Program(
-                name="myscript", description="My test script", version="1.2.3"
-            ),
+            program=Program(name="myscript", description="My test script", version="1.2.3"),
             ioargs=IOArgumentPaths(
-                input_dirs=[
-                    IOArgumentPath(
-                        name="input-dir", path=input_dir, help="Input directory"
-                    )
-                ],
-                output_dirs=[
-                    IOArgumentPath(
-                        name="output-dir", path=output_dir, help="Output directory"
-                    )
-                ],
+                input_dirs=[IOArgumentPath(name="input-dir", path=input_dir, help="Input directory")],
+                output_dirs=[IOArgumentPath(name="output-dir", path=output_dir, help="Output directory")],
             ),
             argv=argv,
             current_user="tester",
@@ -1427,15 +1348,9 @@ class Test_record:
         end_time = datetime(2026, 1, 16, 12, 0, 5, tzinfo=UTC)
 
         crate_meta = record(
-            program=Program(
-                name="myscript", description="My test script", version="1.2.3"
-            ),
+            program=Program(name="myscript", description="My test script", version="1.2.3"),
             ioargs=IOArgumentPaths(
-                input_dirs=[
-                    IOArgumentPath(
-                        name="input-dir", path=input_dir, help="Input directory"
-                    )
-                ],
+                input_dirs=[IOArgumentPath(name="input-dir", path=input_dir, help="Input directory")],
             ),
             argv=argv,
             current_user="tester",
@@ -1480,9 +1395,7 @@ class Test_record:
             ],
         )
 
-    def test_1outputfile_in_nested_dir_relative_path(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ):
+    def test_1outputfile_in_nested_dir_relative_path(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         crate_dir = tmp_path
         nested_dir = crate_dir / "nested"
         nested_dir.mkdir()
@@ -1500,15 +1413,9 @@ class Test_record:
             "nested/input.txt",
         ]
         crate_meta = record(
-            program=Program(
-                name="myscript", description="My test script", version="1.2.3"
-            ),
+            program=Program(name="myscript", description="My test script", version="1.2.3"),
             ioargs=IOArgumentPaths(
-                input_files=[
-                    IOArgumentPath(
-                        name="input", path=Path("nested/input.txt"), help="Input file"
-                    )
-                ],
+                input_files=[IOArgumentPath(name="input", path=Path("nested/input.txt"), help="Input file")],
             ),
             argv=argv1,
             current_user="tester",
@@ -1555,9 +1462,7 @@ class Test_record:
             ],
         )
 
-    def test_1inputdir_in_nested_dir_relative_path(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ):
+    def test_1inputdir_in_nested_dir_relative_path(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         crate_dir = tmp_path
         nested_dir = crate_dir / "nested"
         nested_dir.mkdir()
@@ -1575,15 +1480,9 @@ class Test_record:
             "nested/input",
         ]
         crate_meta = record(
-            program=Program(
-                name="myscript", description="My test script", version="1.2.3"
-            ),
+            program=Program(name="myscript", description="My test script", version="1.2.3"),
             ioargs=IOArgumentPaths(
-                input_dirs=[
-                    IOArgumentPath(
-                        name="input", path=Path("nested/input"), help="Input dir"
-                    )
-                ],
+                input_dirs=[IOArgumentPath(name="input", path=Path("nested/input"), help="Input dir")],
             ),
             argv=argv1,
             current_user="tester",
@@ -1648,18 +1547,10 @@ class Test_record:
 
         with pytest.raises(ValueError, match="is outside the crate root"):
             record(
-                program=Program(
-                    name="myscript", description="My test script", version="1.2.3"
-                ),
+                program=Program(name="myscript", description="My test script", version="1.2.3"),
                 ioargs=IOArgumentPaths(
-                    input_files=[
-                        IOArgumentPath(name="input", path=input_path, help="Input file")
-                    ],
-                    output_files=[
-                        IOArgumentPath(
-                            name="output", path=output_path, help="Output file"
-                        )
-                    ],
+                    input_files=[IOArgumentPath(name="input", path=input_path, help="Input file")],
+                    output_files=[IOArgumentPath(name="output", path=output_path, help="Output file")],
                 ),
                 argv=argv,
                 current_user="tester",
@@ -1679,16 +1570,10 @@ class Test_record:
             ),
         ],
     )
-    def test_different_timezones(
-        self, tmp_path: Path, start_tz: ZoneInfo | None, end_tz: ZoneInfo | None
-    ):
-        with pytest.raises(
-            ValueError, match=r"start_time and end_time must have same timezone"
-        ):
+    def test_different_timezones(self, tmp_path: Path, start_tz: ZoneInfo | None, end_tz: ZoneInfo | None):
+        with pytest.raises(ValueError, match=r"start_time and end_time must have same timezone"):
             record(
-                program=Program(
-                    name="myscript", description="My test script", version="1.2.3"
-                ),
+                program=Program(name="myscript", description="My test script", version="1.2.3"),
                 ioargs=IOArgumentPaths(),
                 argv=["myscript"],
                 start_time=datetime(2026, 1, 16, 12, 0, 0, tzinfo=start_tz),
@@ -1699,9 +1584,7 @@ class Test_record:
     def test_end_time_before_start_time(self, tmp_path: Path):
         with pytest.raises(ValueError, match=r"start_time must be before end_time"):
             record(
-                program=Program(
-                    name="myscript", description="My test script", version="1.2.3"
-                ),
+                program=Program(name="myscript", description="My test script", version="1.2.3"),
                 ioargs=IOArgumentPaths(),
                 argv=["myscript"],
                 start_time=datetime(2026, 1, 16, 12, 0, 5, tzinfo=UTC),

@@ -4,13 +4,13 @@ from pathlib import Path
 from typing import Annotated
 
 from cyclopts import App, Parameter
+
 from rocrate_action_recorder.adapters.cyclopts import (
     INPUT_FILE,
     OUTPUT_FILE,
     RECORD_TRIGGER,
     record_cyclopts,
 )
-
 
 app = App(
     version="1.0.0",

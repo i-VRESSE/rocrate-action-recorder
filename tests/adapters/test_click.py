@@ -52,12 +52,8 @@ class Test_collect_record_info_from_click:
             version=None,
         )
         expected_paths = IOArgumentPaths(
-            input_files=[
-                IOArgumentPath(name="input", path=input_file, help="Input file")
-            ],
-            output_files=[
-                IOArgumentPath(name="output", path=output_file, help="Output file")
-            ],
+            input_files=[IOArgumentPath(name="input", path=input_file, help="Input file")],
+            output_files=[IOArgumentPath(name="output", path=output_file, help="Output file")],
         )
         assert program == expected_program
         assert paths == expected_paths
@@ -107,9 +103,7 @@ class Test_collect_record_info_from_click:
             )
 
         expected_paths = IOArgumentPaths(
-            input_files=[
-                IOArgumentPath(name="inputs", path=input_file, help="Input files")
-            ],
+            input_files=[IOArgumentPath(name="inputs", path=input_file, help="Input files")],
         )
         assert paths == expected_paths
 
@@ -260,9 +254,7 @@ class Test_collect_record_info_from_click:
             )
 
         expected_paths = IOArgumentPaths(
-            input_files=[
-                IOArgumentPath(name="input", path=Path("input.txt"), help="Input file")
-            ],
+            input_files=[IOArgumentPath(name="input", path=Path("input.txt"), help="Input file")],
         )
         assert paths == expected_paths
 
@@ -287,9 +279,7 @@ class Test_collect_record_info_from_click:
             )
 
         expected_paths = IOArgumentPaths(
-            input_files=[
-                IOArgumentPath(name="input", path=input_file, help="Input file")
-            ],
+            input_files=[IOArgumentPath(name="input", path=input_file, help="Input file")],
         )
         assert paths == expected_paths
 
@@ -313,9 +303,7 @@ class Test_collect_record_info_from_click:
         args = ["commit", "--input", str(input_file)]
 
         with cli.make_context("git", args) as parent_ctx:
-            subcommand_name, subcommand, remaining_args = cli.resolve_command(
-                parent_ctx, args
-            )
+            subcommand_name, subcommand, remaining_args = cli.resolve_command(parent_ctx, args)
             with subcommand.make_context(
                 subcommand_name,
                 remaining_args,
@@ -340,9 +328,7 @@ class Test_collect_record_info_from_click:
             },
         )
         expected_paths = IOArgumentPaths(
-            input_files=[
-                IOArgumentPath(name="input", path=input_file, help="File to commit")
-            ],
+            input_files=[IOArgumentPath(name="input", path=input_file, help="File to commit")],
         )
         assert program == expected_program
         assert paths == expected_paths
@@ -371,17 +357,13 @@ class Test_collect_record_info_from_click:
         args = ["remote", "add", "--input", str(input_file)]
 
         with cli.make_context("git", args) as root_ctx:
-            remote_name, remote_cmd, remaining_args = cli.resolve_command(
-                root_ctx, args
-            )
+            remote_name, remote_cmd, remaining_args = cli.resolve_command(root_ctx, args)
             with remote_cmd.make_context(
                 remote_name,
                 remaining_args,
                 parent=root_ctx,
             ) as remote_ctx:
-                add_name, add_cmd, add_args = remote_cmd.resolve_command(
-                    remote_ctx, remaining_args
-                )
+                add_name, add_cmd, add_args = remote_cmd.resolve_command(remote_ctx, remaining_args)
                 with add_cmd.make_context(
                     add_name,
                     add_args,
@@ -413,18 +395,14 @@ class Test_collect_record_info_from_click:
             },
         )
         expected_paths = IOArgumentPaths(
-            input_files=[
-                IOArgumentPath(name="input", path=input_file, help="Config file")
-            ],
+            input_files=[IOArgumentPath(name="input", path=input_file, help="Config file")],
         )
         assert program == expected_program
         assert paths == expected_paths
 
     def test_subcommand_with_parent_flags(self):
         @click.group(name="git", help="Git version control system")
-        @click.option(
-            "--no-pager", is_flag=True, help="Do not pipe output into a pager"
-        )
+        @click.option("--no-pager", is_flag=True, help="Do not pipe output into a pager")
         def cli(no_pager: bool) -> None:
             _ = no_pager
 
@@ -434,9 +412,7 @@ class Test_collect_record_info_from_click:
 
         args = ["--no-pager", "status"]
         with cli.make_context("git", args) as parent_ctx:
-            subcommand_name, subcommand, remaining_args = cli.resolve_command(
-                parent_ctx, args
-            )
+            subcommand_name, subcommand, remaining_args = cli.resolve_command(parent_ctx, args)
             with subcommand.make_context(
                 subcommand_name,
                 remaining_args,
@@ -492,9 +468,7 @@ class Test_collect_record_info_from_click:
             "myscript",
             ["--input-dir", str(input_dir), "--output-dir", str(output_dir)],
         ) as ctx:
-            names = IOArgumentNames(
-                input_dirs=["input_dir"], output_dirs=["output_dir"]
-            )
+            names = IOArgumentNames(input_dirs=["input_dir"], output_dirs=["output_dir"])
 
             program, paths = collect_record_info_from_click(ctx, ctx.params, names)
 
@@ -504,9 +478,7 @@ class Test_collect_record_info_from_click:
             version=None,
         )
         expected_paths = IOArgumentPaths(
-            input_dirs=[
-                IOArgumentPath(name="input_dir", path=input_dir, help="Input directory")
-            ],
+            input_dirs=[IOArgumentPath(name="input_dir", path=input_dir, help="Input directory")],
             output_dirs=[
                 IOArgumentPath(
                     name="output_dir",
@@ -556,12 +528,8 @@ class Test_collect_record_info_from_click:
             version=None,
         )
         expected_paths = IOArgumentPaths(
-            input_files=[
-                IOArgumentPath(name="input", path=input_file, help="Input file")
-            ],
-            output_files=[
-                IOArgumentPath(name="output", path=output_file, help="Output file")
-            ],
+            input_files=[IOArgumentPath(name="input", path=input_file, help="Input file")],
+            output_files=[IOArgumentPath(name="output", path=output_file, help="Output file")],
         )
         assert program == expected_program
         assert paths == expected_paths
@@ -590,15 +558,10 @@ class Test_collect_record_info_from_click:
             input_files=[],
         )
         assert paths == expected_paths
-        assert (
-            "Unable to convert stdin/stdout file-like object to Path, ignoring it"
-            in caplog.text
-        )
+        assert "Unable to convert stdin/stdout file-like object to Path, ignoring it" in caplog.text
         assert "has no associated path-like argument value" in caplog.text
 
-    def test_filetype_multiple_with_stdin(
-        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
-    ):
+    def test_filetype_multiple_with_stdin(self, tmp_path: Path, caplog: pytest.LogCaptureFixture):
         @click.command(name="myscript", help="Example Click CLI")
         @click.option(
             "--input",
@@ -625,15 +588,10 @@ class Test_collect_record_info_from_click:
             )
 
         expected_paths = IOArgumentPaths(
-            input_files=[
-                IOArgumentPath(name="input", path=input_file, help="Input file")
-            ],
+            input_files=[IOArgumentPath(name="input", path=input_file, help="Input file")],
         )
         assert paths == expected_paths
-        assert (
-            "Unable to convert stdin/stdout file-like object to Path, ignoring it"
-            in caplog.text
-        )
+        assert "Unable to convert stdin/stdout file-like object to Path, ignoring it" in caplog.text
         assert "has no associated path-like argument value" not in caplog.text
 
     def test_str_arg(self, tmp_path: Path):
@@ -651,9 +609,7 @@ class Test_collect_record_info_from_click:
             )
 
         expected_paths = IOArgumentPaths(
-            input_files=[
-                IOArgumentPath(name="input", path=input_file, help="Input file")
-            ],
+            input_files=[IOArgumentPath(name="input", path=input_file, help="Input file")],
             output_files=[],
         )
         assert paths == expected_paths
@@ -665,15 +621,12 @@ class Test_collect_record_info_from_click:
             _ = count
 
         with cmd.make_context("myscript", ["--count", "5"]) as ctx:
-            with pytest.raises(
-                TypeError,
-                match="argument should be a str or an os.PathLike object where __fspath__ returns a str, not 'int'",
-            ):
-                collect_record_info_from_click(
-                    ctx,
-                    ctx.params,
-                    IOArgumentNames(input_files=["count"]),
-                )
+            _, paths = collect_record_info_from_click(
+                ctx,
+                ctx.params,
+                IOArgumentNames(input_files=["count"]),
+            )
+            assert paths == IOArgumentPaths(input_files=[])
 
     def test_overwrite_software_version(self):
         @click.command(name="myscript", help="Example Click CLI")
@@ -831,9 +784,7 @@ class Test_recorded_click:
             output_dirs=["output_dir"],
             dataset_license="CC-BY-4.0",
         )
-        def handler(
-            input: Path, output: Path, input_dir: Path, output_dir: Path
-        ) -> None:
+        def handler(input: Path, output: Path, input_dir: Path, output_dir: Path) -> None:
             _ = input_dir
             output.write_text(input.read_text().upper())
             output_dir.mkdir()

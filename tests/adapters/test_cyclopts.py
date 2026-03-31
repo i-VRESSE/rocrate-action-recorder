@@ -1,21 +1,21 @@
 import asyncio
 import sys
 from collections.abc import Callable
-from io import BytesIO, TextIOWrapper
-from textwrap import dedent
 from dataclasses import dataclass
+from io import BytesIO, TextIOWrapper
 from pathlib import Path
+from textwrap import dedent
 from types import ModuleType
 from typing import Annotated
 
-from attrs import define
 import pytest
+from attrs import define
 from cyclopts import App, Group, MissingArgumentError, Parameter, ResultAction
 from cyclopts.types import (
-    NonExistentFile,
-    StdioPath,
     ExistingDirectory,
     NonExistentDirectory,
+    NonExistentFile,
+    StdioPath,
 )
 from pydantic import BaseModel
 from rocrate.rocrate import Metadata, ROCrate
@@ -53,9 +53,7 @@ def assert_crate(
 
     crate = ROCrate(crate_dir)
     actions = crate.get_by_type("CreateAction", exact=True)
-    assert len(actions) == 1, (
-        f"Expected exactly one CreateAction in the crate, found {len(actions)}"
-    )
+    assert len(actions) == 1, f"Expected exactly one CreateAction in the crate, found {len(actions)}"
     action = actions[0]
 
     if action_id is not None:
@@ -197,9 +195,7 @@ class TestMarkerless:
             working_tmp_path,
         )
         instrument = action["instrument"]
-        assert (
-            instrument["description"] == "This is the docstring for the main function."
-        )
+        assert instrument["description"] == "This is the docstring for the main function."
 
     def test_description_from_docstring_head_only(self, working_tmp_path: Path):
         app = App(result_action="return_value", version="1.0.0")
@@ -230,9 +226,7 @@ class TestMarkerless:
             Some more text that should be included.""")
         assert instrument["description"] == expected
 
-    def test_override_dataset_license(
-        self, working_tmp_path: Path, caplog: pytest.LogCaptureFixture
-    ):
+    def test_override_dataset_license(self, working_tmp_path: Path, caplog: pytest.LogCaptureFixture):
         app = self.app_with_no_markers()
         tokens = ""
 
@@ -308,9 +302,7 @@ def do_value_error() -> None:
 
 
 class TestResultAction:
-    def app_with_result_action(
-        self, result_action: ResultAction, do: Callable[[], object]
-    ) -> App:
+    def app_with_result_action(self, result_action: ResultAction, do: Callable[[], object]) -> App:
         app = App(result_action=result_action, version="1.0.0")
 
         @app.default
@@ -469,9 +461,7 @@ class TestTrigger:
 
         return app
 
-    def test_parameterless_on(
-        self, working_tmp_path: Path, capsys: pytest.CaptureFixture[str]
-    ):
+    def test_parameterless_on(self, working_tmp_path: Path, capsys: pytest.CaptureFixture[str]):
         app = self.app_with_parameterless_trigger()
 
         tokens = "--prov"
@@ -488,9 +478,7 @@ class TestTrigger:
             instrument_id="main@1.0.0",
         )
 
-    def test_parameterless_off(
-        self, working_tmp_path: Path, capsys: pytest.CaptureFixture[str]
-    ):
+    def test_parameterless_off(self, working_tmp_path: Path, capsys: pytest.CaptureFixture[str]):
         app = self.app_with_parameterless_trigger()
 
         tokens = ""
@@ -517,9 +505,7 @@ class TestTrigger:
 
         return app
 
-    def test_with_trigger_on(
-        self, working_tmp_path: Path, capsys: pytest.CaptureFixture[str]
-    ):
+    def test_with_trigger_on(self, working_tmp_path: Path, capsys: pytest.CaptureFixture[str]):
         app = self.app_with_trigger()
         tokens = "--prov"
 
@@ -536,9 +522,7 @@ class TestTrigger:
             instrument_id="main@1.0.0",
         )
 
-    def test_with_trigger_default(
-        self, working_tmp_path: Path, capsys: pytest.CaptureFixture[str]
-    ):
+    def test_with_trigger_default(self, working_tmp_path: Path, capsys: pytest.CaptureFixture[str]):
         app = self.app_with_trigger()
         tokens = ""
 
@@ -574,9 +558,7 @@ class TestTrigger:
 
         return app
 
-    def test_trigger_on_in_meta(
-        self, working_tmp_path: Path, capsys: pytest.CaptureFixture[str]
-    ):
+    def test_trigger_on_in_meta(self, working_tmp_path: Path, capsys: pytest.CaptureFixture[str]):
         app = self.app_with_trigger_in_meta()
         tokens = "--prov foo 3"
 
@@ -593,9 +575,7 @@ class TestTrigger:
         captured = capsys.readouterr()
         assert "Provenance recording is enabled." in captured.out
 
-    def test_trigger_off_in_meta(
-        self, working_tmp_path: Path, capsys: pytest.CaptureFixture[str]
-    ):
+    def test_trigger_off_in_meta(self, working_tmp_path: Path, capsys: pytest.CaptureFixture[str]):
         app = self.app_with_trigger_in_meta()
         tokens = "foo 3"
 
@@ -620,15 +600,11 @@ class TestTrigger:
 
         @app.default
         def main(*, common: Common | None = None):
-            print(
-                f"Provenance recording is {'enabled' if common and common.prov else 'disabled'}."
-            )
+            print(f"Provenance recording is {'enabled' if common and common.prov else 'disabled'}.")
 
         return app
 
-    def test_shared_trigger_on(
-        self, working_tmp_path: Path, capsys: pytest.CaptureFixture[str]
-    ):
+    def test_shared_trigger_on(self, working_tmp_path: Path, capsys: pytest.CaptureFixture[str]):
         app = self.app_with_shared_trigger()
         tokens = "--prov"
 
@@ -645,9 +621,7 @@ class TestTrigger:
             instrument_id="main@1.0.0",
         )
 
-    def test_shared_trigger_off(
-        self, working_tmp_path: Path, capsys: pytest.CaptureFixture[str]
-    ):
+    def test_shared_trigger_off(self, working_tmp_path: Path, capsys: pytest.CaptureFixture[str]):
         app = self.app_with_shared_trigger()
         tokens = ""
 
@@ -671,9 +645,7 @@ class TestTrigger:
 
         @app.default
         def main(*, common: Common | None = None):
-            print(
-                f"Provenance recording is {'enabled' if common and common.prov else 'disabled'}."
-            )
+            print(f"Provenance recording is {'enabled' if common and common.prov else 'disabled'}.")
 
         return app
 
@@ -689,9 +661,7 @@ class TestTrigger:
 
         @app.default
         def main(*, common: Common | None = None):
-            print(
-                f"Provenance recording is {'enabled' if common and common.prov else 'disabled'}."
-            )
+            print(f"Provenance recording is {'enabled' if common and common.prov else 'disabled'}.")
 
         return app
 
@@ -708,9 +678,7 @@ class TestTrigger:
 
         @app.default
         def main(*, common: Common | None = None):
-            print(
-                f"Provenance recording is {'enabled' if common and common.prov else 'disabled'}."
-            )
+            print(f"Provenance recording is {'enabled' if common and common.prov else 'disabled'}.")
 
         return app
 
@@ -785,9 +753,7 @@ class TestTrigger:
         def main(*, common: Common | None = None):
             assert common is not None
             common.output.write_text("DATA")
-            print(
-                f"Provenance recording is {'enabled' if common.prov else 'disabled'}."
-            )
+            print(f"Provenance recording is {'enabled' if common.prov else 'disabled'}.")
 
         return app
 
@@ -836,9 +802,7 @@ class TestSubcommands:
 
         return app
 
-    def test_subcommand(
-        self, working_tmp_path: Path, capsys: pytest.CaptureFixture[str]
-    ):
+    def test_subcommand(self, working_tmp_path: Path, capsys: pytest.CaptureFixture[str]):
         app = self.app_with_subcommand()
         tokens = "process"
 
@@ -868,9 +832,7 @@ class TestSubcommands:
 
         return app
 
-    def test_subsubcommand(
-        self, working_tmp_path: Path, capsys: pytest.CaptureFixture[str]
-    ):
+    def test_subsubcommand(self, working_tmp_path: Path, capsys: pytest.CaptureFixture[str]):
         app = self.app_with_subsubcommand()
         tokens = "remote add"
 
@@ -991,9 +953,7 @@ class TestSingleMarkers:
 
         @app.default
         def main(
-            input: Annotated[
-                StdioPath, Parameter(help="The input file path"), INPUT_FILE
-            ],
+            input: Annotated[StdioPath, Parameter(help="The input file path"), INPUT_FILE],
             /,
         ):
             print(f"Received input from {input}.")
@@ -1302,23 +1262,17 @@ class TestPluralMarkers:
         assert input1.id == input_fn1
         assert input1["name"] == input_fn1
         # description does make sense in this case, since parameter has non-path-like types
-        assert (
-            input1["description"] == "The 2 input file paths and an integer in between"
-        )
+        assert input1["description"] == "The 2 input file paths and an integer in between"
         input2 = inputs[1]
         assert input2.id == input_fn2
         assert input2["name"] == input_fn2
-        assert (
-            input2["description"] == "The 2 input file paths and an integer in between"
-        )
+        assert input2["description"] == "The 2 input file paths and an integer in between"
 
     def test_multiple_input_files_named_nested_tuple(self, working_tmp_path: Path):
         app = App(name="myapp", result_action="return_value", version="1.0.0")
 
         @app.default
-        def main(
-            *, foo: Annotated[tuple[tuple[Path, int], tuple[Path, int]], INPUT_FILES]
-        ):
+        def main(*, foo: Annotated[tuple[tuple[Path, int], tuple[Path, int]], INPUT_FILES]):
             print(f"Received input files: {foo}.")
 
         input_file_1 = working_tmp_path / "input1.txt"
@@ -1450,9 +1404,7 @@ class TestAsync:
         )
 
     @pytest.mark.asyncio
-    async def test_run_async(
-        self, working_tmp_path: Path, capsys: pytest.CaptureFixture[str]
-    ):
+    async def test_run_async(self, working_tmp_path: Path, capsys: pytest.CaptureFixture[str]):
         app = self.app_with_async()
         tokens = ""
 
@@ -1477,9 +1429,7 @@ class TestStdioPath:
         capsys: pytest.CaptureFixture[str],
         monkeypatch: pytest.MonkeyPatch,
     ):
-        monkeypatch.setattr(
-            "sys.stdin", TextIOWrapper(BytesIO(b"hello\n"), encoding="utf-8")
-        )
+        monkeypatch.setattr("sys.stdin", TextIOWrapper(BytesIO(b"hello\n"), encoding="utf-8"))
 
         app = App(result_action="return_value", version="1.0.0")
 
@@ -1504,9 +1454,7 @@ class TestStdioPath:
             instrument_id="main@1.0.0",
         )
 
-    def test_stdout_on_output_file(
-        self, working_tmp_path: Path, capsys: pytest.CaptureFixture[str]
-    ):
+    def test_stdout_on_output_file(self, working_tmp_path: Path, capsys: pytest.CaptureFixture[str]):
         app = App(result_action="return_value", version="1.0.0")
 
         @app.default
@@ -1806,10 +1754,7 @@ class Test_value2paths:
         paths = value2paths(StdioPath("-"))
 
         assert paths == []
-        assert (
-            "Unable to convert stdin/stdout file-like object to Path, ignoring it"
-            in caplog.text
-        )
+        assert "Unable to convert stdin/stdout file-like object to Path, ignoring it" in caplog.text
 
     def test_mixed_paths_with_stdiopath_dash(self, tmp_path: Path):
         path = tmp_path / "input.txt"

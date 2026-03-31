@@ -7,10 +7,7 @@ import pytest
 class ConjunctiveGraphFilter(logging.Filter):
     def filter(self, record):
         message = record.getMessage()
-        return not (
-            "ConjunctiveGraph is deprecated" in message
-            or "Consider reporting this as a bug" in message
-        )
+        return not ("ConjunctiveGraph is deprecated" in message or "Consider reporting this as a bug" in message)
 
 
 @pytest.fixture(scope="session", autouse=True)

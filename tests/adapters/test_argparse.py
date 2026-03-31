@@ -20,9 +20,7 @@ from rocrate_action_recorder.core import (
 
 class Test_version_from_parser:
     def test_golden_path(self):
-        parser = ArgumentParser(
-            prog="myscript", description="Process input and generate output"
-        )
+        parser = ArgumentParser(prog="myscript", description="Process input and generate output")
         parser.add_argument("--version", action="version", version="%(prog)s 2.0.1")
 
         version = version_from_parser(parser)
@@ -30,9 +28,7 @@ class Test_version_from_parser:
         assert version == "2.0.1"
 
     def test_bare_version(self):
-        parser = ArgumentParser(
-            prog="myscript", description="Process input and generate output"
-        )
+        parser = ArgumentParser(prog="myscript", description="Process input and generate output")
         parser.add_argument("--version", action="version", version="1.2.3")
 
         version = version_from_parser(parser)
@@ -40,9 +36,7 @@ class Test_version_from_parser:
         assert version == "1.2.3"
 
     def test_no_version(self):
-        parser = ArgumentParser(
-            prog="myscript", description="Process input and generate output"
-        )
+        parser = ArgumentParser(prog="myscript", description="Process input and generate output")
         parser.add_argument("--input", type=Path, help="Input file")
         # No version argument added
 
@@ -74,12 +68,8 @@ class Test_collect_record_info_from_argparse:
         )
         assert program == expected_program
         expected_paths = IOArgumentPaths(
-            input_files=[
-                IOArgumentPath(name="input", path=input_file, help="Input file")
-            ],
-            output_files=[
-                IOArgumentPath(name="output", path=output_file, help="Output file")
-            ],
+            input_files=[IOArgumentPath(name="input", path=input_file, help="Input file")],
+            output_files=[IOArgumentPath(name="output", path=output_file, help="Output file")],
         )
         assert paths == expected_paths
 
@@ -117,9 +107,7 @@ class Test_collect_record_info_from_argparse:
         )
 
         expected_paths = IOArgumentPaths(
-            input_files=[
-                IOArgumentPath(name="inputs", path=input_file, help="Input files")
-            ],
+            input_files=[IOArgumentPath(name="inputs", path=input_file, help="Input files")],
         )
         assert paths == expected_paths
 
@@ -185,9 +173,7 @@ class Test_collect_record_info_from_argparse:
         )
 
         expected_paths = IOArgumentPaths(
-            input_files=[
-                IOArgumentPath(name="inputs", path=input_file, help="Input files")
-            ],
+            input_files=[IOArgumentPath(name="inputs", path=input_file, help="Input files")],
         )
         assert paths == expected_paths
 
@@ -251,9 +237,7 @@ class Test_collect_record_info_from_argparse:
         )
 
         expected_paths = IOArgumentPaths(
-            input_files=[
-                IOArgumentPath(name="input", path=input_file, help="Input file")
-            ],
+            input_files=[IOArgumentPath(name="input", path=input_file, help="Input file")],
         )
         assert paths == expected_paths
 
@@ -310,9 +294,7 @@ class Test_collect_record_info_from_argparse:
 
     def test_action_extend_multiple(self):
         parser = ArgumentParser(prog="processor", description="Process files")
-        parser.add_argument(
-            "--inputs", action="extend", nargs="+", type=Path, help="Input files"
-        )
+        parser.add_argument("--inputs", action="extend", nargs="+", type=Path, help="Input files")
         input_files = [Path("file1.txt"), Path("file2.txt"), Path("file3.txt")]
         ns = parser.parse_args(
             [
@@ -359,22 +341,14 @@ class Test_collect_record_info_from_argparse:
         )
 
         expected_paths = IOArgumentPaths(
-            input_files=[
-                IOArgumentPath(name="input", path=input_file, help="Input file")
-            ],
-            output_files=[
-                IOArgumentPath(name="output", path=output_file, help="Output file")
-            ],
+            input_files=[IOArgumentPath(name="input", path=input_file, help="Input file")],
+            output_files=[IOArgumentPath(name="output", path=output_file, help="Output file")],
         )
         assert paths == expected_paths
 
     def test_arg_with_default(self):
-        parser = ArgumentParser(
-            prog="myscript", description="Process input and generate output"
-        )
-        parser.add_argument(
-            "--input", type=Path, default=Path("input.txt"), help="Input file"
-        )
+        parser = ArgumentParser(prog="myscript", description="Process input and generate output")
+        parser.add_argument("--input", type=Path, default=Path("input.txt"), help="Input file")
         # Don't provide input, it will use default
         ns = parser.parse_args([])
 
@@ -387,24 +361,18 @@ class Test_collect_record_info_from_argparse:
         )
 
         expected_paths = IOArgumentPaths(
-            input_files=[
-                IOArgumentPath(name="input", path=Path("input.txt"), help="Input file")
-            ],
+            input_files=[IOArgumentPath(name="input", path=Path("input.txt"), help="Input file")],
         )
         assert paths == expected_paths
 
     def test_args_with_dest(self):
-        parser = ArgumentParser(
-            prog="myscript", description="Process input and generate output"
-        )
+        parser = ArgumentParser(prog="myscript", description="Process input and generate output")
         parser.add_argument("--input", dest="myinput", type=Path, help="Input file")
         parser.add_argument("--output", dest="myoutput", type=Path, help="Output file")
 
         input_file = Path("input.txt")
         output_file = Path("output.txt")
-        ns = parser.parse_args(
-            ["--input", str(input_file), "--output", str(output_file)]
-        )
+        ns = parser.parse_args(["--input", str(input_file), "--output", str(output_file)])
 
         _, paths = collect_record_info_from_argparse(
             parser,
@@ -415,19 +383,13 @@ class Test_collect_record_info_from_argparse:
             ),
         )
         expected_paths = IOArgumentPaths(
-            input_files=[
-                IOArgumentPath(name="myinput", path=input_file, help="Input file")
-            ],
-            output_files=[
-                IOArgumentPath(name="myoutput", path=output_file, help="Output file")
-            ],
+            input_files=[IOArgumentPath(name="myinput", path=input_file, help="Input file")],
+            output_files=[IOArgumentPath(name="myoutput", path=output_file, help="Output file")],
         )
         assert paths == expected_paths
 
     def test_args_with_flags(self):
-        parser = ArgumentParser(
-            prog="myscript", description="Process input and generate output"
-        )
+        parser = ArgumentParser(prog="myscript", description="Process input and generate output")
         parser.add_argument("-i", "--input", type=Path, help="Input file")
 
         input_file = Path("input.txt")
@@ -442,9 +404,7 @@ class Test_collect_record_info_from_argparse:
         )
 
         expected_paths = IOArgumentPaths(
-            input_files=[
-                IOArgumentPath(name="input", path=input_file, help="Input file")
-            ],
+            input_files=[IOArgumentPath(name="input", path=input_file, help="Input file")],
         )
         assert paths == expected_paths
 
@@ -483,9 +443,7 @@ class Test_collect_record_info_from_argparse:
         )
         assert program == expected_program
         expected_paths = IOArgumentPaths(
-            input_files=[
-                IOArgumentPath(name="input", path=input_path, help="File to commit")
-            ],
+            input_files=[IOArgumentPath(name="input", path=input_path, help="File to commit")],
         )
         assert paths == expected_paths
 
@@ -493,9 +451,7 @@ class Test_collect_record_info_from_argparse:
         """Test argparse_info extracts nested subcommands (e.g., git remote add)."""
         parser = ArgumentParser(prog="git", description="Git version control system")
         subparsers = parser.add_subparsers(dest="command", help="Git commands")
-        remote_parser = subparsers.add_parser(
-            "remote", description="Manage remote repositories"
-        )
+        remote_parser = subparsers.add_parser("remote", description="Manage remote repositories")
         remote_subparsers = remote_parser.add_subparsers(dest="action")
         add_parser = remote_subparsers.add_parser("add", description="Add a new remote")
         add_parser.add_argument("--input", type=Path, help="Config file")
@@ -538,9 +494,7 @@ class Test_collect_record_info_from_argparse:
         )
         assert program == expected_program
         expected_paths = IOArgumentPaths(
-            input_files=[
-                IOArgumentPath(name="input", path=input_path, help="Config file")
-            ],
+            input_files=[IOArgumentPath(name="input", path=input_path, help="Config file")],
         )
         assert paths == expected_paths
 
@@ -569,9 +523,7 @@ class Test_collect_record_info_from_argparse:
     def test_subcommand_with_parent_flags(self, tmp_path: Path):
         """Test argparse_info handles flags before subcommand (e.g., git --no-pager status)."""
         parser = ArgumentParser(prog="git", description="Git version control system")
-        parser.add_argument(
-            "--no-pager", action="store_true", help="Do not pipe output into a pager"
-        )
+        parser.add_argument("--no-pager", action="store_true", help="Do not pipe output into a pager")
         subparsers = parser.add_subparsers(dest="command")
         subparsers.add_parser("status", description="Show working tree status")
 
@@ -626,11 +578,7 @@ class Test_collect_record_info_from_argparse:
         )
 
         expected_paths = IOArgumentPaths(
-            input_files=[
-                IOArgumentPath(
-                    name="config", path=config_path, help="Path to git config file"
-                )
-            ],
+            input_files=[IOArgumentPath(name="config", path=config_path, help="Path to git config file")],
         )
         assert paths == expected_paths
 
@@ -660,10 +608,7 @@ class Test_collect_record_info_from_argparse:
             input_files=[],
         )
         assert paths == expected_paths
-        assert (
-            "Unable to convert stdin/stdout file-like object to Path, ignoring it"
-            in caplog.text
-        )
+        assert "Unable to convert stdin/stdout file-like object to Path, ignoring it" in caplog.text
         assert "has no associated path-like argument value" in caplog.text
 
     def test_filetype_stdout(self, caplog: pytest.LogCaptureFixture):
@@ -692,18 +637,13 @@ class Test_collect_record_info_from_argparse:
             output_files=[],
         )
         assert paths == expected_paths
-        assert (
-            "Unable to convert stdin/stdout file-like object to Path, ignoring it"
-            in caplog.text
-        )
+        assert "Unable to convert stdin/stdout file-like object to Path, ignoring it" in caplog.text
         assert "has no associated path-like argument value" in caplog.text
 
     def test_filetype_args(self, tmp_path: Path):
         parser = ArgumentParser(prog="myscript")
         parser.add_argument("--input", type=FileType("r"), help="Input file")
-        parser.add_argument(
-            "--output", type=FileType("w", encoding="UTF-8"), help="Output file"
-        )
+        parser.add_argument("--output", type=FileType("w", encoding="UTF-8"), help="Output file")
 
         crate_dir = tmp_path
         input_path = crate_dir / "input.txt"
@@ -732,21 +672,15 @@ class Test_collect_record_info_from_argparse:
         )
 
         expected_paths = IOArgumentPaths(
-            input_files=[
-                IOArgumentPath(name="input", path=input_path, help="Input file")
-            ],
-            output_files=[
-                IOArgumentPath(name="output", path=output_path, help="Output file")
-            ],
+            input_files=[IOArgumentPath(name="input", path=input_path, help="Input file")],
+            output_files=[IOArgumentPath(name="output", path=output_path, help="Output file")],
         )
         assert paths == expected_paths
 
     def test_action_append_filetype_arg_stdin(self, caplog: pytest.LogCaptureFixture):
         # myscript --input somefile --input -
         parser = ArgumentParser(prog="myscript")
-        parser.add_argument(
-            "--input", type=FileType("r"), action="append", help="Input file"
-        )
+        parser.add_argument("--input", type=FileType("r"), action="append", help="Input file")
 
         class FakeStdin:
             def __init__(self):
@@ -767,10 +701,7 @@ class Test_collect_record_info_from_argparse:
             input_files=[IOArgumentPath(name="input", path=infile, help="Input file")],
         )
         assert paths == expected_paths
-        assert (
-            "Unable to convert stdin/stdout file-like object to Path, ignoring it"
-            in caplog.text
-        )
+        assert "Unable to convert stdin/stdout file-like object to Path, ignoring it" in caplog.text
         assert "has no associated path-like argument value" not in caplog.text
 
     def test_str_arg(self, tmp_path: Path):
@@ -795,9 +726,7 @@ class Test_collect_record_info_from_argparse:
         )
 
         expected_paths = IOArgumentPaths(
-            input_files=[
-                IOArgumentPath(name="input", path=input_path, help="Input file")
-            ],
+            input_files=[IOArgumentPath(name="input", path=input_path, help="Input file")],
             output_files=[],
         )
         assert paths == expected_paths
@@ -808,17 +737,14 @@ class Test_collect_record_info_from_argparse:
 
         ns = parser.parse_args(["--count", "5"])
 
-        with pytest.raises(
-            TypeError,
-            match="argument should be a str or an os.PathLike object where __fspath__ returns a str, not 'int'",
-        ):
-            collect_record_info_from_argparse(
-                parser,
-                ns,
-                IOArgumentNames(
-                    input_files=["count"],
-                ),
-            )
+        _, paths = collect_record_info_from_argparse(
+            parser,
+            ns,
+            IOArgumentNames(
+                input_files=["count"],
+            ),
+        )
+        assert paths.input_files == []
 
     def test_overwrite_software_version(self):
         parser = ArgumentParser(prog="myscript", description="Example CLI")
@@ -826,9 +752,7 @@ class Test_collect_record_info_from_argparse:
         ns = parser.parse_args([])
         names = IOArgumentNames()
 
-        program, _ = collect_record_info_from_argparse(
-            parser, ns, names, software_version="2.0.0"
-        )
+        program, _ = collect_record_info_from_argparse(parser, ns, names, software_version="2.0.0")
 
         assert program.version == "2.0.0"
 
@@ -901,9 +825,7 @@ class Test_recorded_argparse:
         crate_meta = tmp_path / Metadata.BASENAME
         assert not crate_meta.exists()
 
-    def test_with_truthy_prov_arg(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ):
+    def test_with_truthy_prov_arg(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.chdir(tmp_path)
         parser = ArgumentParser(prog="myscript")
         parser.add_argument("--version", action="version", version="%(prog)s 1.2.3")
@@ -956,9 +878,7 @@ class Test_recorded_argparse:
             args.output.write_text(args.input.read_text().upper())
             args.output_dir.mkdir()
 
-        args = parser.parse_args(
-            [str(input_file), str(output_file), str(input_dir), str(output_dir)]
-        )
+        args = parser.parse_args([str(input_file), str(output_file), str(input_dir), str(output_dir)])
         handler(args)
 
         crate_meta = tmp_path / Metadata.BASENAME
@@ -998,15 +918,11 @@ class Test_recorded_argparse:
         crate_meta = crate_dir / Metadata.BASENAME
         assert crate_meta.exists()
 
-    def test_with_crate_dir_argument(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ):
+    def test_with_crate_dir_argument(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.chdir(tmp_path)
         parser = ArgumentParser(prog="myscript")
         parser.add_argument("--version", action="version", version="%(prog)s 1.2.3")
-        parser.add_argument(
-            "--session-dir", type=Path, help="Directory to create crate in"
-        )
+        parser.add_argument("--session-dir", type=Path, help="Directory to create crate in")
         session_dir = tmp_path / "out"
 
         @recorded_argparse(
@@ -1028,15 +944,11 @@ class Test_recorded_argparse:
         crate_meta = session_dir / Metadata.BASENAME
         assert crate_meta.exists()
 
-    def test_with_crate_dir_and_crate_dir_argument(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ):
+    def test_with_crate_dir_and_crate_dir_argument(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.chdir(tmp_path)
         parser = ArgumentParser(prog="myscript")
         parser.add_argument("--version", action="version", version="%(prog)s 1.2.3")
-        parser.add_argument(
-            "--session-dir", type=Path, help="Directory to create crate in"
-        )
+        parser.add_argument("--session-dir", type=Path, help="Directory to create crate in")
         session_dir = tmp_path / "out"
 
         @recorded_argparse(
@@ -1055,9 +967,7 @@ class Test_recorded_argparse:
 
         args = parser.parse_args(["--session-dir", str(session_dir)])
 
-        with pytest.raises(
-            ValueError, match="Cannot specify both crate_dir and crate_dir_argument"
-        ):
+        with pytest.raises(ValueError, match="Cannot specify both crate_dir and crate_dir_argument"):
             handler(args)
 
     def test_with_parser_in_args(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
@@ -1083,9 +993,7 @@ class Test_recorded_argparse:
         crate_meta = tmp_path / Metadata.BASENAME
         assert crate_meta.exists()
 
-    def test_without_parser_or_parser_argument(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ):
+    def test_without_parser_or_parser_argument(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.chdir(tmp_path)
 
         @recorded_argparse(
@@ -1099,14 +1007,10 @@ class Test_recorded_argparse:
             pass
 
         args = Namespace()
-        with pytest.raises(
-            ValueError, match="Must specify either parser or parser_argument"
-        ):
+        with pytest.raises(ValueError, match="Must specify either parser or parser_argument"):
             handler(args)
 
-    def test_with_parser_and_parser_argument(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ):
+    def test_with_parser_and_parser_argument(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.chdir(tmp_path)
         parser = ArgumentParser(prog="myscript")
 
@@ -1125,14 +1029,10 @@ class Test_recorded_argparse:
         args = Namespace()
         args._parser = parser  # Inject the parser into args
 
-        with pytest.raises(
-            ValueError, match="Cannot specify both parser and parser_argument"
-        ):
+        with pytest.raises(ValueError, match="Cannot specify both parser and parser_argument"):
             handler(args)
 
-    def test_with_parser_argument_wrong_type(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ):
+    def test_with_parser_argument_wrong_type(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.chdir(tmp_path)
 
         @recorded_argparse(
@@ -1155,9 +1055,7 @@ class Test_recorded_argparse:
         ):
             handler(args)
 
-    def test_with_parser_argument_missing_parser(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ):
+    def test_with_parser_argument_missing_parser(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.chdir(tmp_path)
 
         @recorded_argparse(
@@ -1173,7 +1071,5 @@ class Test_recorded_argparse:
 
         args = Namespace()  # _parser argument is missing
 
-        with pytest.raises(
-            AttributeError, match="'Namespace' object has no attribute '_parser'"
-        ):
+        with pytest.raises(AttributeError, match="'Namespace' object has no attribute '_parser'"):
             handler(args)

@@ -10,8 +10,6 @@ import importlib.metadata
 import inspect
 import os
 from importlib import import_module
-
-
 from typing import Any
 
 project = "rocrate-action-recorder"
@@ -126,16 +124,15 @@ def linkcode_resolve(domain: str, info: dict) -> str | None:
     if git_commit:
         ref = git_commit
         pr_number = None
+    # No commit available: if this is a pull request build, READTHEDOCS_GIT_IDENTIFIER
+    # contains the PR number. In that case we can't point to a blob by ref, so
+    # return a link to the pull request page instead.
+    elif git_identifier and version_type == "external":
+        pr_number = git_identifier
+        ref = None
     else:
-        # No commit available: if this is a pull request build, READTHEDOCS_GIT_IDENTIFIER
-        # contains the PR number. In that case we can't point to a blob by ref, so
-        # return a link to the pull request page instead.
-        if git_identifier and version_type == "external":
-            pr_number = git_identifier
-            ref = None
-        else:
-            ref = git_identifier or "main"
-            pr_number = None
+        ref = git_identifier or "main"
+        pr_number = None
 
     filename = os.path.normpath(filename)
     parts = filename.split(os.path.sep)

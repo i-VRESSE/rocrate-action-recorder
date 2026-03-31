@@ -132,9 +132,7 @@ def _dectect_version_by_running(program_name: str) -> str:
             return ""
 
     try:
-        result = subprocess.run(
-            [executable, "--version"], capture_output=True, text=True, timeout=5
-        )
+        result = subprocess.run([executable, "--version"], capture_output=True, text=True, timeout=5)
         if result.stdout:
             output = result.stdout.strip()
             # Remove script name from output by taking the last space-separated token
@@ -310,9 +308,7 @@ def build_software_application(crate: ROCrate, program: Program) -> SoftwareAppl
         A SoftwareApplication object.
     """
     software_version = program.version
-    software_id = (
-        f"{program.name}@{software_version}" if software_version else program.name
-    )
+    software_id = f"{program.name}@{software_version}" if software_version else program.name
     props = {
         "name": program.name,
         "description": program.description,
@@ -411,11 +407,7 @@ def add_file(crate: ROCrate, crate_root: Path, ioarg: IOArgumentPath) -> File:
     rpath = get_relative_path(path, crate_root)
     identifier = str(rpath)
     existing_file = crate.get(identifier)
-    if (
-        existing_file
-        and isinstance(existing_file, File)
-        and isinstance(existing_file.properties, dict)
-    ):
+    if existing_file and isinstance(existing_file, File) and isinstance(existing_file.properties, dict):
         existing_file.properties.update(
             {
                 "description": ioarg.help,
@@ -439,9 +431,7 @@ def add_file(crate: ROCrate, crate_root: Path, ioarg: IOArgumentPath) -> File:
     return file
 
 
-def add_files(
-    crate: ROCrate, crate_root: Path, ioargs: list[IOArgumentPath]
-) -> list[File]:
+def add_files(crate: ROCrate, crate_root: Path, ioargs: list[IOArgumentPath]) -> list[File]:
     """Add multiple files to the crate.
 
     Args:
@@ -484,9 +474,7 @@ def add_dir(crate: ROCrate, crate_root: Path, ioarg: IOArgumentPath) -> Dataset:
     return ds
 
 
-def add_dirs(
-    crate: ROCrate, crate_root: Path, ioargs: list[IOArgumentPath]
-) -> list[Dataset]:
+def add_dirs(crate: ROCrate, crate_root: Path, ioargs: list[IOArgumentPath]) -> list[Dataset]:
     """Add multiple directories to the crate.
 
     Args:
@@ -626,18 +614,10 @@ def conform_to_process_run_crate_profile(crate: ROCrate) -> CreativeWork:
     if not crate.get(prc.id):
         crate.add(prc)
 
-    if (
-        "conformsTo" not in crate.root_dataset
-        or crate.root_dataset["conformsTo"] != prc
-    ):
+    if "conformsTo" not in crate.root_dataset or crate.root_dataset["conformsTo"] != prc:
         crate.root_dataset["conformsTo"] = prc
-    if (
-        "https://w3id.org/ro/terms/workflow-run/context"
-        not in crate.metadata.extra_contexts
-    ):
-        crate.metadata.extra_contexts.append(
-            "https://w3id.org/ro/terms/workflow-run/context"
-        )
+    if "https://w3id.org/ro/terms/workflow-run/context" not in crate.metadata.extra_contexts:
+        crate.metadata.extra_contexts.append("https://w3id.org/ro/terms/workflow-run/context")
     return prc
 
 
@@ -672,12 +652,8 @@ def _update_crate(
 
     software = add_software_application(crate, program)
 
-    all_inputs = add_files(crate, crate_root, ioargs.input_files) + add_dirs(
-        crate, crate_root, ioargs.input_dirs
-    )
-    all_outputs = add_files(crate, crate_root, ioargs.output_files) + add_dirs(
-        crate, crate_root, ioargs.output_dirs
-    )
+    all_inputs = add_files(crate, crate_root, ioargs.input_files) + add_dirs(crate, crate_root, ioargs.input_dirs)
+    all_outputs = add_files(crate, crate_root, ioargs.output_files) + add_dirs(crate, crate_root, ioargs.output_dirs)
 
     agent = add_agent(crate, current_user)
 
@@ -699,7 +675,9 @@ def _update_crate(
     if not crate.name:
         crate.name = f"Files used by {program.name}"
     if not crate.description:
-        crate.description = f"An RO-Crate recording the files and directories that were used as input or output by {program.name}."
+        crate.description = (
+            f"An RO-Crate recording the files and directories that were used as input or output by {program.name}."
+        )
 
     return crate
 

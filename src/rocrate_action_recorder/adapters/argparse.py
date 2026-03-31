@@ -29,9 +29,7 @@ class MissingDestArgparseSubparserError(ValueError):
     """Raised when an argparse subparser is missing the 'dest' argument."""
 
     def __init__(self) -> None:
-        super().__init__(
-            "Argparse subparsers must have a 'dest' parameter defined to identify the chosen subcommand"
-        )
+        super().__init__("Argparse subparsers must have a 'dest' parameter defined to identify the chosen subcommand")
 
 
 def argparse_help(parser: ArgumentParser, ns: Namespace, arg_name: str) -> str | None:
@@ -103,9 +101,7 @@ def version_from_parser(parser: ArgumentParser) -> str | None:
     """
     for action in parser._actions:
         if isinstance(action, _VersionAction) and action.version is not None:
-            version = (
-                action.version.replace("%(prog)s", "").replace(parser.prog, "").strip()
-            )
+            version = action.version.replace("%(prog)s", "").replace(parser.prog, "").strip()
             return version
     return None
 
@@ -140,22 +136,16 @@ def program_from_parser(parser: ArgumentParser, ns: Namespace) -> Program:
     return program
 
 
-def map_name2paths(
-    parser: ArgumentParser, ns: Namespace, name: str
-) -> list[IOArgumentPath]:
+def map_name2paths(parser: ArgumentParser, ns: Namespace, name: str) -> list[IOArgumentPath]:
     value = getattr(ns, name)
     help = argparse_help(parser, ns, name) or ""
     paths = argparse_value2paths(value)
     if not paths:
-        logger.warning(
-            f"Argument name '{name}' has no associated path-like argument value(s)."
-        )
+        logger.warning(f"Argument name '{name}' has no associated path-like argument value(s).")
     return [IOArgumentPath(name=name, path=path, help=help) for path in paths]
 
 
-def map_names2paths(
-    parser: ArgumentParser, ns: Namespace, names: list[str]
-) -> list[IOArgumentPath]:
+def map_names2paths(parser: ArgumentParser, ns: Namespace, names: list[str]) -> list[IOArgumentPath]:
     args: list[IOArgumentPath] = []
     for name in names:
         paths = map_name2paths(parser, ns, name)
@@ -248,9 +238,7 @@ def record_argparse(
         MissingDestArgparseSubparserError:
             If parser has subparsers but dest is not set.
     """
-    program, ioargs = collect_record_info_from_argparse(
-        parser, ns, ios, software_version=software_version
-    )
+    program, ioargs = collect_record_info_from_argparse(parser, ns, ios, software_version=software_version)
     return record(
         program=program,
         ioargs=ioargs,
@@ -337,9 +325,7 @@ def recorded_argparse[T](
 
             if enabled_argument is None or getattr(args, enabled_argument, False):
                 if crate_dir and crate_dir_argument:
-                    raise ValueError(
-                        "Cannot specify both crate_dir and crate_dir_argument"
-                    )
+                    raise ValueError("Cannot specify both crate_dir and crate_dir_argument")
                 my_crate_dir: Path | None = None
                 if crate_dir is not None:
                     my_crate_dir = crate_dir

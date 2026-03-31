@@ -112,9 +112,7 @@ def map_name2paths(
     help_text = click_help(ctx, name) or ""
     paths = click_value2paths(value)
     if not paths:
-        logger.warning(
-            f"Argument name '{name}' has no associated path-like argument value(s)."
-        )
+        logger.warning(f"Argument name '{name}' has no associated path-like argument value(s).")
     return [IOArgumentPath(name=name, path=path, help=help_text) for path in paths]
 
 
@@ -250,15 +248,11 @@ def recorded_click[T](
 
             ctx = click.get_current_context(silent=True)
             if ctx is None:
-                logger.warning(
-                    "No active Click context found, skipping RO-Crate recording."
-                )
+                logger.warning("No active Click context found, skipping RO-Crate recording.")
                 return result
 
             params = ctx.params
-            should_record = enabled_argument is None or bool(
-                params.get(enabled_argument, False)
-            )
+            should_record = enabled_argument is None or bool(params.get(enabled_argument, False))
             if should_record:
                 end_time = datetime.now(tz=UTC)
                 ios = IOArgumentNames(
