@@ -56,10 +56,6 @@ def assert_crate(
     )
     action = actions[0]
 
-    # TODO remove debug
-    print(list(action.keys()))
-    print(action["instrument"])
-
     if action_id is not None:
         assert action["@id"] == action_id
         assert action["name"] == action_id
@@ -126,8 +122,6 @@ class TestMarkerless:
                 app(tokens="")
 
         assert_no_crate(working_tmp_path)
-
-    # TODO install_completion
 
     def test_simplest(self, working_tmp_path: Path, caplog: pytest.LogCaptureFixture):
         app = self.app_with_no_markers()
@@ -575,6 +569,49 @@ class TestTrigger:
         assert "Provenance recording is disabled." in captured.out
         assert_no_crate(working_tmp_path)
 
+    def app_with_nested_basemodel_output_trigger(self) -> App:
+        app = App(result_action="return_value", version="1.0.0")
+
+        class Common(BaseModel):
+            output: Annotated[Path, OUTPUT_FILE]
+            prov: Annotated[
+                bool,
+                Parameter(negative=""),
+                RECORD_TRIGGER,
+            ] = False
+
+        @app.default
+        def main(*, common: Common | None = None):
+            assert common is not None
+            common.output.write_text("DATA")
+            print(
+                f"Provenance recording is {'enabled' if common.prov else 'disabled'}."
+            )
+
+        return app
+
+    def test_nested_basemodel_output_trigger_on(
+        self,
+        working_tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ):
+        app = self.app_with_nested_basemodel_output_trigger()
+        tokens = ["--common.prov", "--common.output", "output.txt"]
+
+        with record_cyclopts(app, tokens=tokens):
+            app(tokens=tokens)
+
+        captured = capsys.readouterr()
+        assert "Provenance recording is enabled." in captured.out
+        assert (working_tmp_path / "output.txt").read_text() == "DATA"
+        assert_crate(
+            working_tmp_path,
+            action_id="main --common.prov --common.output output.txt",
+            input_ids=set(),
+            output_ids={"output.txt"},
+            instrument_id="main@1.0.0",
+        )
+
 
 class TestSubcommands:
     def app_with_subcommand(self) -> App:
@@ -780,7 +817,6 @@ class TestSingleMarkers:
         # Check input file properties
         f = action["object"][0]
         assert f.id == input_fn
-        # TODO get help from parameter
         assert f["description"] == "The input file path"
         assert f["name"] == input_fn
 

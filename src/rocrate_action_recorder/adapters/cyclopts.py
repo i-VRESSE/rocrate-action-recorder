@@ -186,6 +186,73 @@ def _is_attrs_instance(value: Any) -> bool:
         return False
 
 
+def _search_argument_value(value: Any, field_name: str) -> Any | None:
+    """Search recursively for a field value within parsed Cyclopts arguments.
+
+    Args:
+        value: Value to inspect.
+        field_name: Field name to resolve.
+
+    Returns:
+        The resolved value, or None if the field cannot be found.
+    """
+    if value is None:
+        return None
+
+    if is_dataclass(value):
+        if hasattr(value, field_name):
+            return getattr(value, field_name)
+        for nested_name in value.__dataclass_fields__:
+            resolved = _search_argument_value(getattr(value, nested_name), field_name)
+            if resolved is not None:
+                return resolved
+        return None
+
+    if _is_pydantic_model(value):
+        if hasattr(value, field_name):
+            return getattr(value, field_name)
+        # Pydantic models have __fields__ (Pydantic v1) or model_fields (Pydantic v2)
+        # Access from class to avoid deprecation warning in Pydantic v2.11+
+        model_cls = type(value)
+        fields = getattr(model_cls, "model_fields", None) or getattr(
+            model_cls, "__fields__", None
+        )
+        if fields:
+            for nested_name in fields:
+                resolved = _search_argument_value(
+                    getattr(value, nested_name), field_name
+                )
+                if resolved is not None:
+                    return resolved
+        return None
+
+    if _is_attrs_instance(value):
+        if hasattr(value, field_name):
+            return getattr(value, field_name)
+        attrs_attrs = getattr(type(value), "__attrs_attrs__", None)
+        if attrs_attrs:
+            for attr in attrs_attrs:
+                nested_name = attr.name
+                resolved = _search_argument_value(
+                    getattr(value, nested_name), field_name
+                )
+                if resolved is not None:
+                    return resolved
+        return None
+
+    if isinstance(value, tuple):
+        for item in value:
+            resolved = _search_argument_value(item, field_name)
+            if resolved is not None:
+                return resolved
+        return None
+
+    if hasattr(value, field_name):
+        return getattr(value, field_name)
+
+    return None
+
+
 def _lookup_argument_value(arguments: dict[str, Any], field_name: str) -> Any | None:
     """Resolve an argument value from Cyclopts bound arguments.
 
@@ -211,63 +278,8 @@ def _lookup_argument_value(arguments: dict[str, Any], field_name: str) -> Any | 
     if field_name in arguments:
         return arguments[field_name]
 
-    def search(value: Any) -> Any | None:
-        if value is None:
-            return None
-
-        if is_dataclass(value):
-            if hasattr(value, field_name):
-                return getattr(value, field_name)
-            for nested_name in value.__dataclass_fields__:
-                resolved = search(getattr(value, nested_name))
-                if resolved is not None:
-                    return resolved
-            return None
-
-        if _is_pydantic_model(value):
-            if hasattr(value, field_name):
-                return getattr(value, field_name)
-            # Pydantic models have __fields__ (Pydantic v1) or model_fields (Pydantic v2)
-            # Access from class to avoid deprecation warning in Pydantic v2.11+
-            model_cls = type(value)
-            fields = getattr(model_cls, "model_fields", None) or getattr(
-                model_cls, "__fields__", None
-            )
-            if fields:
-                for nested_name in fields:
-                    resolved = search(getattr(value, nested_name))
-                    if resolved is not None:
-                        return resolved
-            return None
-
-        if _is_attrs_instance(value):
-            if hasattr(value, field_name):
-                return getattr(value, field_name)
-            # attrs instances have __attrs_attrs__
-            attrs_attrs = getattr(type(value), "__attrs_attrs__", None)
-            if attrs_attrs:
-                for attr in attrs_attrs:
-                    nested_name = attr.name
-                    resolved = search(getattr(value, nested_name))
-                    if resolved is not None:
-                        return resolved
-            return None
-
-        # Handle tuples (e.g., from *args)
-        if isinstance(value, tuple):
-            for item in value:
-                resolved = search(item)
-                if resolved is not None:
-                    return resolved
-            return None
-
-        if hasattr(value, field_name):
-            return getattr(value, field_name)
-
-        return None
-
     for argument_value in arguments.values():
-        resolved = search(argument_value)
+        resolved = _search_argument_value(argument_value, field_name)
         if resolved is not None:
             return resolved
 
@@ -290,27 +302,11 @@ def _lookup_nested_field(value: Any, field_path: str) -> Any | None:
     if value is None:
         return None
 
-    # Handle dataclass
-    elif is_dataclass(value):
+    if hasattr(value, current_field):
         if hasattr(value, current_field):
             current_value = getattr(value, current_field)
         else:
             return None
-    # Handle Pydantic model
-    elif _is_pydantic_model(value):
-        if hasattr(value, current_field):
-            current_value = getattr(value, current_field)
-        else:
-            return None
-    # Handle attrs instance
-    elif _is_attrs_instance(value):
-        if hasattr(value, current_field):
-            current_value = getattr(value, current_field)
-        else:
-            return None
-    # Handle generic objects
-    elif hasattr(value, current_field):
-        current_value = getattr(value, current_field)
     else:
         return None
 
@@ -319,6 +315,47 @@ def _lookup_nested_field(value: Any, field_path: str) -> Any | None:
         return _lookup_nested_field(current_value, parts[1])
 
     return current_value
+
+
+def _resolve_io_argument_paths(
+    names: list[str],
+    name_info: dict[str, tuple[str, str]],
+    arguments: dict[str, Any],
+) -> list[IOArgumentPath]:
+    """Resolve named Cyclopts arguments to path-bearing IOArgumentPath entries.
+
+    Args:
+        names: IO argument names to resolve.
+        name_info: Mapping from CLI argument name to bound field name and help text.
+        arguments: Parsed Cyclopts bound arguments.
+
+    Returns:
+        Resolved IO argument path entries.
+    """
+    result: list[IOArgumentPath] = []
+    for name in names:
+        info = name_info.get(name)
+        if info is None:
+            logger.warning(
+                f"Argument name '{name}' does not exist in parsed Cyclopts args."
+            )
+            continue
+        field_name, help_text = info
+        value = _lookup_argument_value(arguments, field_name)
+        if value is None:
+            logger.warning(
+                f"Argument name '{name}' does not exist in parsed Cyclopts args."
+            )
+            continue
+        paths = value2paths(value)
+        if not paths:
+            logger.warning(
+                f"Argument name '{name}' has no associated path-like argument value(s)."
+            )
+        result.extend(
+            IOArgumentPath(name=name, path=path, help=help_text) for path in paths
+        )
+    return result
 
 
 def _collect_ioargs(
@@ -345,37 +382,19 @@ def _collect_ioargs(
             help_text = arg.parameter.help
         name_info[name] = (field_name, help_text)
 
-    def resolve(names: list[str]) -> list[IOArgumentPath]:
-        result: list[IOArgumentPath] = []
-        for name in names:
-            info = name_info.get(name)
-            if info is None:
-                logger.warning(
-                    f"Argument name '{name}' does not exist in parsed Cyclopts args."
-                )
-                continue
-            field_name, help_text = info
-            value = _lookup_argument_value(bound_args.arguments, field_name)
-            if value is None:
-                logger.warning(
-                    f"Argument name '{name}' does not exist in parsed Cyclopts args."
-                )
-                continue
-            paths = value2paths(value)
-            if not paths:
-                logger.warning(
-                    f"Argument name '{name}' has no associated path-like argument value(s)."
-                )
-            result.extend(
-                IOArgumentPath(name=name, path=p, help=help_text) for p in paths
-            )
-        return result
-
     ioargs = IOArgumentPaths(
-        input_files=resolve(ios.input_files),
-        output_files=resolve(ios.output_files),
-        input_dirs=resolve(ios.input_dirs),
-        output_dirs=resolve(ios.output_dirs),
+        input_files=_resolve_io_argument_paths(
+            ios.input_files, name_info, bound_args.arguments
+        ),
+        output_files=_resolve_io_argument_paths(
+            ios.output_files, name_info, bound_args.arguments
+        ),
+        input_dirs=_resolve_io_argument_paths(
+            ios.input_dirs, name_info, bound_args.arguments
+        ),
+        output_dirs=_resolve_io_argument_paths(
+            ios.output_dirs, name_info, bound_args.arguments
+        ),
     )
     return ioargs
 
@@ -402,6 +421,11 @@ def _extract_markers_from_pydantic_fields(
     for field_name, field_info in fields.items():
         field_path = f"{prefix}.{field_name}" if prefix else field_name
         ann = field_info.annotation
+        metadata = getattr(field_info, "metadata", ())
+
+        for meta in metadata:
+            if meta in _MARKER_TO_CATEGORY or meta == RECORD_TRIGGER:
+                markers.append((field_path, meta))
 
         # Recursively check nested Pydantic models
         if _is_pydantic_model_type(ann):
@@ -463,6 +487,98 @@ def _is_attrs_type(ann: Any) -> bool:
         return False
 
 
+def _collect_ios_from_argument_collection(
+    collection: ArgumentCollection,
+    ios: IOArgumentNames,
+    record_trigger_name: str | None,
+) -> str | None:
+    """Collect IO markers and record trigger from an argument collection.
+
+    Args:
+        collection: Argument collection to inspect.
+        ios: IO marker accumulator.
+        record_trigger_name: Current record trigger name, if any.
+
+    Returns:
+        Updated record trigger name.
+    """
+    for arg in collection:
+        name = arg.name.lstrip("-")
+        ann = arg.field_info.annotation
+        if not hasattr(ann, "__metadata__"):
+            continue
+        for meta in ann.__metadata__:
+            if meta in _MARKER_TO_CATEGORY:
+                getattr(ios, _MARKER_TO_CATEGORY[meta]).append(name)
+            elif meta == RECORD_TRIGGER and record_trigger_name is None:
+                record_trigger_name = name
+
+    return record_trigger_name
+
+
+def _collect_ios_from_bound_value(
+    value: Any,
+    ios: IOArgumentNames,
+    record_trigger_name: str | None,
+    prefix: str = "",
+) -> str | None:
+    """Collect IO markers and record trigger from a bound argument value.
+
+    Args:
+        value: Bound argument value to inspect.
+        ios: IO marker accumulator.
+        record_trigger_name: Current record trigger name, if any.
+        prefix: Optional field prefix for nested models.
+
+    Returns:
+        Updated record trigger name.
+    """
+    if _is_pydantic_model(value):
+        model_cls = type(value)
+        markers = _extract_markers_from_pydantic_fields(model_cls, prefix)
+        for field_path, meta in markers:
+            if meta in _MARKER_TO_CATEGORY:
+                getattr(ios, _MARKER_TO_CATEGORY[meta]).append(field_path)
+            elif meta == RECORD_TRIGGER and record_trigger_name is None:
+                record_trigger_name = field_path
+
+    if _is_attrs_instance(value):
+        attrs_cls = type(value)
+        markers = _extract_markers_from_attrs_fields(attrs_cls, prefix)
+        for field_path, meta in markers:
+            if meta in _MARKER_TO_CATEGORY:
+                getattr(ios, _MARKER_TO_CATEGORY[meta]).append(field_path)
+            elif meta == RECORD_TRIGGER and record_trigger_name is None:
+                record_trigger_name = field_path
+
+    return record_trigger_name
+
+
+def _collect_ios_from_bound_arguments(
+    bound_args: inspect.BoundArguments,
+    ios: IOArgumentNames,
+    record_trigger_name: str | None,
+) -> str | None:
+    """Collect IO markers and record trigger from parsed bound arguments.
+
+    Args:
+        bound_args: Parsed Cyclopts bound arguments.
+        ios: IO marker accumulator.
+        record_trigger_name: Current record trigger name, if any.
+
+    Returns:
+        Updated record trigger name.
+    """
+    for arg_value in bound_args.arguments.values():
+        record_trigger_name = _collect_ios_from_bound_value(
+            arg_value,
+            ios,
+            record_trigger_name,
+        )
+
+    return record_trigger_name
+
+
 def _detect_ios_and_trigger(
     argument_collection: ArgumentCollection,
     command: Any | None = None,
@@ -482,52 +598,18 @@ def _detect_ios_and_trigger(
     ios = IOArgumentNames()
     record_trigger_name: str | None = None
 
-    def _collect_from_collection(collection: ArgumentCollection):
-        nonlocal record_trigger_name
-        for arg in collection:
-            name = arg.name.lstrip("-")
-            ann = arg.field_info.annotation
-            if not hasattr(ann, "__metadata__"):
-                continue
-            for meta in ann.__metadata__:
-                if meta in _MARKER_TO_CATEGORY:
-                    getattr(ios, _MARKER_TO_CATEGORY[meta]).append(name)
-                elif meta == RECORD_TRIGGER:
-                    if record_trigger_name is None:
-                        record_trigger_name = name
-
-    def _collect_markers_from_bound_args(bound_args: inspect.BoundArguments):
-        """Extract markers from bound arguments, including nested model fields."""
-        nonlocal record_trigger_name
-
-        def _process_value(value: Any, prefix: str = "") -> None:
-            nonlocal record_trigger_name
-
-            if _is_pydantic_model(value):
-                model_cls = type(value)
-                markers = _extract_markers_from_pydantic_fields(model_cls, prefix)
-                for field_path, meta in markers:
-                    if meta in _MARKER_TO_CATEGORY:
-                        getattr(ios, _MARKER_TO_CATEGORY[meta]).append(field_path)
-                    elif meta == RECORD_TRIGGER and record_trigger_name is None:
-                        record_trigger_name = field_path
-
-            if _is_attrs_instance(value):
-                attrs_cls = type(value)
-                markers = _extract_markers_from_attrs_fields(attrs_cls, prefix)
-                for field_path, meta in markers:
-                    if meta in _MARKER_TO_CATEGORY:
-                        getattr(ios, _MARKER_TO_CATEGORY[meta]).append(field_path)
-                    elif meta == RECORD_TRIGGER and record_trigger_name is None:
-                        record_trigger_name = field_path
-
-        for arg_value in bound_args.arguments.values():
-            _process_value(arg_value)
-
-    _collect_from_collection(argument_collection)
+    record_trigger_name = _collect_ios_from_argument_collection(
+        argument_collection,
+        ios,
+        record_trigger_name,
+    )
 
     if meta_argument_collection is not None:
-        _collect_from_collection(meta_argument_collection)
+        record_trigger_name = _collect_ios_from_argument_collection(
+            meta_argument_collection,
+            ios,
+            record_trigger_name,
+        )
 
     if command is not None and inspect.isfunction(command):
         sig = inspect.signature(command)
@@ -543,7 +625,11 @@ def _detect_ios_and_trigger(
                                 record_trigger_name = param_name
 
     if bound_args is not None:
-        _collect_markers_from_bound_args(bound_args)
+        record_trigger_name = _collect_ios_from_bound_arguments(
+            bound_args,
+            ios,
+            record_trigger_name,
+        )
 
     return ios, record_trigger_name
 
