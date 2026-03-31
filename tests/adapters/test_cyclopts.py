@@ -3,7 +3,7 @@ from io import BytesIO, TextIOWrapper
 from textwrap import dedent
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Annotated, NamedTuple
+from typing import Annotated
 
 from attrs import define
 import pytest
@@ -29,7 +29,7 @@ from rocrate_action_recorder.adapters.cyclopts import (
     RECORD_TRIGGER,
     record_cyclopts,
 )
-from rocrate_action_recorder.adapters.shared import value2paths as cyclopts_value2paths
+from rocrate_action_recorder.adapters.shared import value2paths as value2paths
 
 
 def assert_no_crate(crate_dir: Path):
@@ -40,12 +40,10 @@ def assert_no_crate(crate_dir: Path):
 def assert_crate(
     crate_dir: Path,
     *,
-    expected_action_id: str | None = None,
-    expected_input_ids: set[str] | None = None,
-    expected_output_ids: set[str] | None = None,
-    excluded_input_ids: set[str] | None = None,
-    excluded_output_ids: set[str] | None = None,
-    expected_instrument_id: str | None = None,
+    action_id: str | None = None,
+    input_ids: set[str] | None = None,
+    output_ids: set[str] | None = None,
+    instrument_id: str | None = None,
 ) -> tuple[ROCrate, dict]:
     crate_path = crate_dir / Metadata.BASENAME
     assert crate_path.exists()
@@ -62,25 +60,19 @@ def assert_crate(
     print(list(action.keys()))
     print(action["instrument"])
 
-    if expected_action_id is not None:
-        assert action["@id"] == expected_action_id
-        assert action["name"] == expected_action_id
-    if expected_instrument_id is not None:
-        assert action["instrument"]["@id"] == expected_instrument_id
+    if action_id is not None:
+        assert action["@id"] == action_id
+        assert action["name"] == action_id
+    if instrument_id is not None:
+        assert action["instrument"]["@id"] == instrument_id
 
     input_ids = {i["@id"] for i in action.get("object", [])}
-    if expected_input_ids is not None:
-        assert expected_input_ids <= input_ids
+    if input_ids is not None:
+        assert input_ids <= input_ids
 
     output_ids = {o["@id"] for o in action.get("result", [])}
-    if expected_output_ids is not None:
-        assert expected_output_ids <= output_ids
-
-    if excluded_input_ids is not None:
-        assert excluded_input_ids.isdisjoint(input_ids)
-
-    if excluded_output_ids is not None:
-        assert excluded_output_ids.isdisjoint(output_ids)
+    if output_ids is not None:
+        assert output_ids <= output_ids
 
     return crate, action
 
@@ -147,10 +139,10 @@ class TestMarkerless:
 
         _, action = assert_crate(
             working_tmp_path,
-            expected_action_id="main",
-            expected_input_ids=set(),
-            expected_output_ids=set(),
-            expected_instrument_id="main@1.0.0",
+            action_id="main",
+            input_ids=set(),
+            output_ids=set(),
+            instrument_id="main@1.0.0",
         )
         assert "No dataset license specified for the RO-Crate" in caplog.text
 
@@ -227,7 +219,7 @@ class TestMarkerless:
         with record_cyclopts(app, dataset_license="CC-BY-4.0", tokens=tokens):
             app(tokens=tokens)
 
-        crate, _ = assert_crate(working_tmp_path, expected_action_id="main")
+        crate, _ = assert_crate(working_tmp_path, action_id="main")
         assert crate.license == "CC-BY-4.0"
         assert "No dataset license specified for the RO-Crate" not in caplog.text
 
@@ -240,7 +232,7 @@ class TestMarkerless:
         with record_cyclopts(app, tokens=tokens, crate_dir=crate_dir):
             app(tokens=tokens)
 
-        assert_crate(crate_dir, expected_action_id="main")
+        assert_crate(crate_dir, action_id="main")
 
     def test_override_software_version(self, working_tmp_path: Path):
         app = self.app_with_no_markers()
@@ -251,8 +243,8 @@ class TestMarkerless:
 
         assert_crate(
             working_tmp_path,
-            expected_action_id="main",
-            expected_instrument_id="main@2.0.0",
+            action_id="main",
+            instrument_id="main@2.0.0",
         )
 
     def test_override_user(self, working_tmp_path: Path):
@@ -262,11 +254,58 @@ class TestMarkerless:
         with record_cyclopts(app, current_user="alice", tokens=tokens):
             app(tokens=tokens)
 
-        _, action = assert_crate(working_tmp_path, expected_action_id="main")
+        _, action = assert_crate(working_tmp_path, action_id="main")
         assert action["agent"]["@id"] == "alice"
 
 
 class TestTrigger:
+    def app_with_parameterless_trigger(self) -> App:
+        app = App(result_action="return_value", version="1.0.0")
+
+        @app.default
+        def main(
+            *,
+            prov: Annotated[
+                bool,
+                RECORD_TRIGGER,
+            ] = False,
+        ):
+            print(f"Provenance recording is {'enabled' if prov else 'disabled'}.")
+
+        return app
+
+    def test_parameterless_on(
+        self, working_tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ):
+        app = self.app_with_parameterless_trigger()
+
+        tokens = "--prov"
+        with record_cyclopts(app, tokens=tokens):
+            app(tokens=tokens)
+
+        captured = capsys.readouterr()
+        assert "Provenance recording is enabled." in captured.out
+        assert_crate(
+            working_tmp_path,
+            action_id="main --prov",
+            input_ids=set(),
+            output_ids=set(),
+            instrument_id="main@1.0.0",
+        )
+
+    def test_parameterless_off(
+        self, working_tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ):
+        app = self.app_with_parameterless_trigger()
+
+        tokens = ""
+        with record_cyclopts(app, tokens=tokens):
+            app(tokens=tokens)
+
+        captured = capsys.readouterr()
+        assert "Provenance recording is disabled." in captured.out
+        assert_no_crate(working_tmp_path)
+
     def app_with_trigger(self) -> App:
         app = App(result_action="return_value", version="1.0.0")
 
@@ -296,10 +335,10 @@ class TestTrigger:
         assert "Provenance recording is enabled." in captured.out
         assert_crate(
             working_tmp_path,
-            expected_action_id="main --prov",
-            expected_input_ids=set(),
-            expected_output_ids=set(),
-            expected_instrument_id="main@1.0.0",
+            action_id="main --prov",
+            input_ids=set(),
+            output_ids=set(),
+            instrument_id="main@1.0.0",
         )
 
     def test_with_trigger_default(
@@ -351,10 +390,10 @@ class TestTrigger:
 
         assert_crate(
             working_tmp_path,
-            expected_action_id="launcher --prov foo 3",
-            expected_input_ids=set(),
-            expected_output_ids=set(),
-            expected_instrument_id="launcher@1.0.0",
+            action_id="launcher --prov foo 3",
+            input_ids=set(),
+            output_ids=set(),
+            instrument_id="launcher@1.0.0",
         )
         captured = capsys.readouterr()
         assert "Provenance recording is enabled." in captured.out
@@ -405,10 +444,10 @@ class TestTrigger:
         assert "Provenance recording is enabled." in captured.out
         assert_crate(
             working_tmp_path,
-            expected_action_id="main --prov",
-            expected_input_ids=set(),
-            expected_output_ids=set(),
-            expected_instrument_id="main@1.0.0",
+            action_id="main --prov",
+            input_ids=set(),
+            output_ids=set(),
+            instrument_id="main@1.0.0",
         )
 
     def test_shared_trigger_off(
@@ -424,7 +463,7 @@ class TestTrigger:
         assert "Provenance recording is disabled." in captured.out
         assert_no_crate(working_tmp_path)
 
-    def app_with_nested_trigger(self):
+    def app_with_nested_dataclass_trigger(self) -> App:
         app = App(result_action="return_value", version="1.0.0")
 
         @dataclass
@@ -443,10 +482,59 @@ class TestTrigger:
 
         return app
 
+    def app_with_nested_basemodel_trigger(self) -> App:
+        app = App(result_action="return_value", version="1.0.0")
+
+        class Common(BaseModel):
+            prov: Annotated[
+                bool,
+                Parameter(negative=""),
+                RECORD_TRIGGER,
+            ] = False
+
+        @app.default
+        def main(*, common: Common | None = None):
+            print(
+                f"Provenance recording is {'enabled' if common and common.prov else 'disabled'}."
+            )
+
+        return app
+
+    def app_with_nested_define_trigger(self) -> App:
+        app = App(result_action="return_value", version="1.0.0")
+
+        @define
+        class Common:
+            prov: Annotated[
+                bool,
+                Parameter(negative=""),
+                RECORD_TRIGGER,
+            ] = False
+
+        @app.default
+        def main(*, common: Common | None = None):
+            print(
+                f"Provenance recording is {'enabled' if common and common.prov else 'disabled'}."
+            )
+
+        return app
+
+    @pytest.mark.parametrize(
+        "app_factory",
+        [
+            app_with_nested_dataclass_trigger,
+            app_with_nested_basemodel_trigger,
+            app_with_nested_define_trigger,
+        ],
+        ids=["dataclass", "basemodel", "define"],
+    )
     def test_nested_trigger_on(
-        self, working_tmp_path: Path, capsys: pytest.CaptureFixture[str]
+        self,
+        app_factory,
+        working_tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
     ):
-        app = self.app_with_nested_trigger()
+        app = app_factory(self)
         tokens = "--common.prov"
 
         with record_cyclopts(app, tokens=tokens):
@@ -456,16 +544,28 @@ class TestTrigger:
         assert "Provenance recording is enabled." in captured.out
         assert_crate(
             working_tmp_path,
-            expected_action_id="main --common.prov",
-            expected_input_ids=set(),
-            expected_output_ids=set(),
-            expected_instrument_id="main@1.0.0",
+            action_id="main --common.prov",
+            input_ids=set(),
+            output_ids=set(),
+            instrument_id="main@1.0.0",
         )
 
+    @pytest.mark.parametrize(
+        "app_factory",
+        [
+            app_with_nested_dataclass_trigger,
+            app_with_nested_basemodel_trigger,
+            app_with_nested_define_trigger,
+        ],
+        ids=["dataclass", "basemodel", "define"],
+    )
     def test_nested_trigger_off(
-        self, working_tmp_path: Path, capsys: pytest.CaptureFixture[str]
+        self,
+        app_factory,
+        working_tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
     ):
-        app = self.app_with_nested_trigger()
+        app = app_factory(self)
         tokens = ""
 
         with record_cyclopts(app, tokens=tokens):
@@ -511,10 +611,10 @@ class TestSubcommands:
         assert "was here" in captured.out
         _, action = assert_crate(
             working_tmp_path,
-            expected_action_id="myapp process",
-            expected_input_ids=set(),
-            expected_output_ids=set(),
-            expected_instrument_id="myapp@1.0.0",
+            action_id="myapp process",
+            input_ids=set(),
+            output_ids=set(),
+            instrument_id="myapp@1.0.0",
         )
         instrument = action["instrument"]
         assert instrument["description"] == "This is my app."
@@ -543,10 +643,10 @@ class TestSubcommands:
         assert "added remote" in captured.out
         assert_crate(
             working_tmp_path,
-            expected_action_id="myapp remote add",
-            expected_input_ids=set(),
-            expected_output_ids=set(),
-            expected_instrument_id="myapp@1.0.0",
+            action_id="myapp remote add",
+            input_ids=set(),
+            output_ids=set(),
+            instrument_id="myapp@1.0.0",
         )
 
 
@@ -577,10 +677,10 @@ class TestSubCommandWithTrigger:
         assert "Provenance recording is enabled." in captured.out
         assert_crate(
             working_tmp_path,
-            expected_action_id="myapp add --prov",
-            expected_input_ids=set(),
-            expected_output_ids=set(),
-            expected_instrument_id="myapp@1.0.0",
+            action_id="myapp add --prov",
+            input_ids=set(),
+            output_ids=set(),
+            instrument_id="myapp@1.0.0",
         )
 
     def test_off(self, working_tmp_path: Path, capsys: pytest.CaptureFixture[str]):
@@ -624,10 +724,10 @@ class TestSubSubCommandWithTrigger:
         assert "Provenance recording is enabled." in captured.out
         assert_crate(
             working_tmp_path,
-            expected_action_id="myapp remote add --prov",
-            expected_input_ids=set(),
-            expected_output_ids=set(),
-            expected_instrument_id="myapp@1.0.0",
+            action_id="myapp remote add --prov",
+            input_ids=set(),
+            output_ids=set(),
+            instrument_id="myapp@1.0.0",
         )
 
     def test_off(self, working_tmp_path: Path, capsys: pytest.CaptureFixture[str]):
@@ -670,10 +770,10 @@ class TestSingleMarkers:
 
         _, action = assert_crate(
             working_tmp_path,
-            expected_action_id=f"myapp {input_fn}",
-            expected_input_ids={input_fn},
-            expected_output_ids=set(),
-            expected_instrument_id="myapp@1.0.0",
+            action_id=f"myapp {input_fn}",
+            input_ids={input_fn},
+            output_ids=set(),
+            instrument_id="myapp@1.0.0",
         )
         instrument = action["instrument"]
         assert instrument["description"] == "The main function"
@@ -706,10 +806,10 @@ class TestSingleMarkers:
 
         _, action = assert_crate(
             working_tmp_path,
-            expected_action_id=f"myapp {input_fn}",
-            expected_input_ids={input_fn},
-            expected_output_ids=set(),
-            expected_instrument_id="myapp@1.0.0",
+            action_id=f"myapp {input_fn}",
+            input_ids={input_fn},
+            output_ids=set(),
+            instrument_id="myapp@1.0.0",
         )
         instrument = action["instrument"]
         assert instrument["description"] == "The main function"
@@ -717,6 +817,34 @@ class TestSingleMarkers:
         f = action["object"][0]
         assert f.id == input_fn
         assert f["description"] == "The input file path"
+        assert f["name"] == input_fn
+
+    def test_input_file_in_nested_tuple(self, working_tmp_path: Path):
+        app = App(name="myapp", result_action="return_value", version="1.0.0")
+
+        @app.default
+        def main(*, input: Annotated[tuple[tuple[int, StdioPath], int], INPUT_FILE]):
+            print(f"Received input from {input}.")
+
+        input_file = working_tmp_path / "input.txt"
+        input_file.write_text("hello")
+        input_fn = input_file.name
+        tokens = ["--input", "42", input_fn, "69"]
+
+        with record_cyclopts(app, tokens=tokens):
+            app(tokens=tokens)
+
+        _, action = assert_crate(
+            working_tmp_path,
+            action_id=f"myapp --input 42 {input_fn} 69",
+            input_ids={input_fn},
+            output_ids=set(),
+            instrument_id="myapp@1.0.0",
+        )
+        # Check input file properties
+        f = action["object"][0]
+        assert f.id == input_fn
+        assert f["description"] == ""
         assert f["name"] == input_fn
 
     def test_output_file(self, working_tmp_path: Path):
@@ -743,9 +871,9 @@ class TestSingleMarkers:
         assert "hello" == output_file.read_text()
         _, action = assert_crate(
             working_tmp_path,
-            expected_action_id=f"myapp {output_fn}",
-            expected_input_ids=set(),
-            expected_output_ids={output_fn},
+            action_id=f"myapp {output_fn}",
+            input_ids=set(),
+            output_ids={output_fn},
         )
         f = action["result"][0]
         assert f.id == output_fn
@@ -776,10 +904,10 @@ class TestSingleMarkers:
 
         _, action = assert_crate(
             working_tmp_path,
-            expected_action_id=f"myapp {input_fn}",
+            action_id=f"myapp {input_fn}",
             # to distinguish dir from file, a / is appended
-            expected_input_ids={"input/"},
-            expected_output_ids=set(),
+            input_ids={"input/"},
+            output_ids=set(),
         )
         f = action["object"][0]
         assert f.id == "input/"
@@ -810,9 +938,9 @@ class TestSingleMarkers:
         assert (output_dir / "result.txt").read_text() == "hello"
         _, action = assert_crate(
             working_tmp_path,
-            expected_action_id=f"myapp {output_fn}",
-            expected_input_ids=set(),
-            expected_output_ids={"output/"},
+            action_id=f"myapp {output_fn}",
+            input_ids=set(),
+            output_ids={"output/"},
         )
         f = action["result"][0]
         assert f.id == "output/"
@@ -846,9 +974,9 @@ class TestPluralMarkers:
 
         _, action = assert_crate(
             working_tmp_path,
-            expected_action_id=f"myapp {input_fn1} {input_fn2}",
-            expected_input_ids={input_fn1, input_fn2},
-            expected_output_ids=set(),
+            action_id=f"myapp {input_fn1} {input_fn2}",
+            input_ids={input_fn1, input_fn2},
+            output_ids=set(),
         )
         inputs = action["object"]
         assert len(inputs) == 2
@@ -887,9 +1015,9 @@ class TestPluralMarkers:
 
         _, action = assert_crate(
             working_tmp_path,
-            expected_action_id=f"myapp {input_fn1} {input_fn2}",
-            expected_input_ids={input_fn1, input_fn2},
-            expected_output_ids=set(),
+            action_id=f"myapp {input_fn1} {input_fn2}",
+            input_ids={input_fn1, input_fn2},
+            output_ids=set(),
         )
         inputs = action["object"]
         assert len(inputs) == 2
@@ -901,6 +1029,88 @@ class TestPluralMarkers:
         assert input2.id == input_fn2
         assert input2["name"] == input_fn2
         assert input2["description"] == "The input file paths"
+
+    def test_multiple_input_files_named_tuple(self, working_tmp_path: Path):
+        app = App(name="myapp", result_action="return_value", version="1.0.0")
+
+        @app.default
+        def main(*, foo: Annotated[tuple[Path, int, Path], INPUT_FILES]):
+            """Read something from the input files.
+
+            Args:
+                foo: The 2 input file paths and an integer in between
+            """
+            print(f"Received input files: {foo}.")
+
+        input_file_1 = working_tmp_path / "input1.txt"
+        input_file_2 = working_tmp_path / "input2.txt"
+        input_file_1.write_text("hello")
+        input_file_2.write_text("world")
+        input_fn1 = input_file_1.name
+        input_fn2 = input_file_2.name
+
+        tokens = ["--foo", input_fn1, "42", input_fn2]
+        with record_cyclopts(app, tokens=tokens):
+            app(tokens=tokens)
+
+        _, action = assert_crate(
+            working_tmp_path,
+            action_id=f"myapp --foo {input_fn1} 42 {input_fn2}",
+            input_ids={input_fn1, input_fn2},
+            output_ids=set(),
+        )
+        inputs = action["object"]
+        assert len(inputs) == 2
+        input1 = inputs[0]
+        assert input1.id == input_fn1
+        assert input1["name"] == input_fn1
+        # description does make sense in this case, since parameter has non-path-like types
+        assert (
+            input1["description"] == "The 2 input file paths and an integer in between"
+        )
+        input2 = inputs[1]
+        assert input2.id == input_fn2
+        assert input2["name"] == input_fn2
+        assert (
+            input2["description"] == "The 2 input file paths and an integer in between"
+        )
+
+    def test_multiple_input_files_named_nested_tuple(self, working_tmp_path: Path):
+        app = App(name="myapp", result_action="return_value", version="1.0.0")
+
+        @app.default
+        def main(
+            *, foo: Annotated[tuple[tuple[Path, int], tuple[Path, int]], INPUT_FILES]
+        ):
+            print(f"Received input files: {foo}.")
+
+        input_file_1 = working_tmp_path / "input1.txt"
+        input_file_2 = working_tmp_path / "input2.txt"
+        input_file_1.write_text("hello")
+        input_file_2.write_text("world")
+        input_fn1 = input_file_1.name
+        input_fn2 = input_file_2.name
+
+        tokens = ["--foo", input_fn1, "42", input_fn2, "69"]
+        with record_cyclopts(app, tokens=tokens):
+            app(tokens=tokens)
+
+        _, action = assert_crate(
+            working_tmp_path,
+            action_id=f"myapp --foo {input_fn1} 42 {input_fn2} 69",
+            input_ids={input_fn1, input_fn2},
+            output_ids=set(),
+        )
+        inputs = action["object"]
+        assert len(inputs) == 2
+        input1 = inputs[0]
+        assert input1.id == input_fn1
+        assert input1["name"] == input_fn1
+        assert input1["description"] == ""
+        input2 = inputs[1]
+        assert input2.id == input_fn2
+        assert input2["name"] == input_fn2
+        assert input2["description"] == ""
 
     def test_other_plural_markers_as_flags(self, working_tmp_path: Path):
         app = App(name="myapp", result_action="return_value", version="1.0.0")
@@ -963,9 +1173,9 @@ class TestPluralMarkers:
 
         _, action = assert_crate(
             working_tmp_path,
-            expected_action_id=f"myapp --input-dirs {input_fn1} --input-dirs {input_fn2} --output-files {output_fn1} --output-files {output_fn2} --output-dirs {output_fn3} --output-dirs {output_fn4}",
-            expected_input_ids={input_fn1 + "/", input_fn2 + "/"},
-            expected_output_ids={
+            action_id=f"myapp --input-dirs {input_fn1} --input-dirs {input_fn2} --output-files {output_fn1} --output-files {output_fn2} --output-dirs {output_fn3} --output-dirs {output_fn4}",
+            input_ids={input_fn1 + "/", input_fn2 + "/"},
+            output_ids={
                 output_fn1,
                 output_fn2,
                 output_fn3 + "/",
@@ -996,10 +1206,10 @@ class TestAsync:
         assert "Hello from async main!" in captured.out
         assert_crate(
             working_tmp_path,
-            expected_action_id="main",
-            expected_input_ids=set(),
-            expected_output_ids=set(),
-            expected_instrument_id="main@1.0.0",
+            action_id="main",
+            input_ids=set(),
+            output_ids=set(),
+            instrument_id="main@1.0.0",
         )
 
     @pytest.mark.asyncio
@@ -1016,10 +1226,10 @@ class TestAsync:
         assert "Hello from async main!" in captured.out
         assert_crate(
             working_tmp_path,
-            expected_action_id="main",
-            expected_input_ids=set(),
-            expected_output_ids=set(),
-            expected_instrument_id="main@1.0.0",
+            action_id="main",
+            input_ids=set(),
+            output_ids=set(),
+            instrument_id="main@1.0.0",
         )
 
 
@@ -1051,10 +1261,10 @@ class TestStdioPath:
         assert "Input content: hello" in captured.out
         assert_crate(
             working_tmp_path,
-            expected_action_id="main -",
-            expected_input_ids=set(),  # stdin is not recorded as an input file
-            expected_output_ids=set(),
-            expected_instrument_id="main@1.0.0",
+            action_id="main -",
+            input_ids=set(),  # stdin is not recorded as an input file
+            output_ids=set(),
+            instrument_id="main@1.0.0",
         )
 
     def test_stdout_on_output_file(
@@ -1076,11 +1286,65 @@ class TestStdioPath:
 
         assert_crate(
             working_tmp_path,
-            expected_action_id="main -",
-            expected_input_ids=set(),
-            expected_output_ids=set(),  # stdout is not recorded as an output file
-            expected_instrument_id="main@1.0.0",
+            action_id="main -",
+            input_ids=set(),
+            output_ids=set(),  # stdout is not recorded as an output file
+            instrument_id="main@1.0.0",
         )
+
+
+class TestDataclass:
+    def test_nested_model(self, working_tmp_path: Path):
+
+        @dataclass
+        class IOConfig:
+            """The IO configuration for the app.
+
+            Args:
+                output: The output file path
+            """
+
+            output: Annotated[Path, OUTPUT_FILE]
+
+        @dataclass
+        class Config:
+            """The configuration for the app.
+
+            Args:
+                io: The IO configuration
+            """
+
+            io: IOConfig
+
+        app = App(name="myapp", result_action="return_value")
+
+        @app.default
+        def main(config: Config):
+            """Main command with nested dataclass config.
+
+            Args:
+                config: The configuration for the app, including IO paths.
+            """
+            config.io.output.write_text("DATA")
+
+        output_file = working_tmp_path / "output.txt"
+        tokens = [str(output_file.name)]
+        with record_cyclopts(app, tokens=tokens):
+            app(tokens=tokens)
+
+        assert output_file.read_text() == "DATA"
+        _, action = assert_crate(
+            working_tmp_path,
+            action_id="myapp output.txt",
+            input_ids=set(),
+            output_ids={"output.txt"},
+        )
+        outputs = action["result"]
+        assert len(outputs) == 1
+        output = outputs[0]
+        assert output.id == "output.txt"
+        assert output["name"] == "output.txt"
+        assert output["description"] == "The output file path"
 
 
 class TestPydantic:
@@ -1123,9 +1387,9 @@ class TestPydantic:
         assert output_file.read_text() == "DATA"
         _, action = assert_crate(
             working_tmp_path,
-            expected_action_id="myapp output.txt",
-            expected_input_ids=set(),
-            expected_output_ids={"output.txt"},
+            action_id="myapp output.txt",
+            input_ids=set(),
+            output_ids={"output.txt"},
         )
         outputs = action["result"]
         assert len(outputs) == 1
@@ -1177,64 +1441,9 @@ class TestAttrs:
         assert output_file.read_text() == "DATA"
         _, action = assert_crate(
             working_tmp_path,
-            expected_action_id="myapp output.txt",
-            expected_input_ids=set(),
-            expected_output_ids={"output.txt"},
-        )
-        outputs = action["result"]
-        assert len(outputs) == 1
-        output = outputs[0]
-        assert output.id == "output.txt"
-        assert output["name"] == "output.txt"
-        assert output["description"] == "The output file path"
-
-
-@pytest.mark.skip(reason="NamedTuple support is not implemented yet")
-class TestNamedTuple:
-    def test_nested_model(self, working_tmp_path: Path):
-
-        class IOConfig(NamedTuple):
-            """The IO configuration for the app.
-
-            Args:
-                output: The output file path
-            """
-
-            output: Annotated[Path, OUTPUT_FILE]
-
-        class Config(NamedTuple):
-            """The configuration for the app.
-
-            Args:
-                io: The IO configuration
-            """
-
-            io: IOConfig
-
-        app = App(name="myapp", result_action="return_value")
-
-        @app.default
-        def main(config: Config):
-            """Main command with nested Pydantic config.
-
-            Args:
-                config: The configuration for the app, including IO paths.
-            """
-            config.io.output.write_text("DATA")
-
-        app.help_print()
-
-        output_file = working_tmp_path / "output.txt"
-        tokens = [str(output_file.name)]
-        with record_cyclopts(app, tokens=tokens):
-            app(tokens=tokens)
-
-        assert output_file.read_text() == "DATA"
-        _, action = assert_crate(
-            working_tmp_path,
-            expected_action_id="myapp output.txt",
-            expected_input_ids=set(),
-            expected_output_ids={"output.txt"},
+            action_id="myapp output.txt",
+            input_ids=set(),
+            output_ids={"output.txt"},
         )
         outputs = action["result"]
         assert len(outputs) == 1
@@ -1247,12 +1456,12 @@ class TestNamedTuple:
 # TODO test lazy loading, https://cyclopts.readthedocs.io/en/stable/lazy_loading.html#lazy-loading
 
 
-class Test_cyclopts_value2paths:
+class Test_value2paths:
     def test_single_path(self, tmp_path: Path):
         path = tmp_path / "test.txt"
         path.write_text("test")
 
-        paths = cyclopts_value2paths(path)
+        paths = value2paths(path)
 
         assert paths == [path]
 
@@ -1262,7 +1471,7 @@ class Test_cyclopts_value2paths:
         path1.write_text("test1")
         path2.write_text("test2")
 
-        paths = cyclopts_value2paths([path1, path2])
+        paths = value2paths([path1, path2])
 
         assert paths == [path1, path2]
 
@@ -1270,12 +1479,12 @@ class Test_cyclopts_value2paths:
         path = tmp_path / "test.txt"
         path.write_text("test")
 
-        paths = cyclopts_value2paths([path, path])
+        paths = value2paths([path, path])
 
         assert paths == [path]
 
     def test_stdiopath_dash_ignored(self, caplog: pytest.LogCaptureFixture):
-        paths = cyclopts_value2paths(StdioPath("-"))
+        paths = value2paths(StdioPath("-"))
 
         assert paths == []
         assert (
@@ -1286,6 +1495,13 @@ class Test_cyclopts_value2paths:
     def test_mixed_paths_with_stdiopath_dash(self, tmp_path: Path):
         path = tmp_path / "input.txt"
 
-        paths = cyclopts_value2paths([path, StdioPath("-")])
+        paths = value2paths([path, StdioPath("-")])
+
+        assert paths == [path]
+
+    def test_tuple_path_int(self, tmp_path: Path):
+        path = tmp_path / "input.txt"
+
+        paths = value2paths((path, 42))
 
         assert paths == [path]

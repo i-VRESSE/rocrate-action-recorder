@@ -42,7 +42,10 @@ def try_convert_to_path(item: Any) -> Path | None:
     if item is None:
         logger.warning("Unable to convert None to Path, ignoring it")
         return None
-    return Path(item)
+    try:
+        return Path(item)
+    except TypeError:
+        return None
 
 
 def _flatten_nested_tuples(value: Any) -> list[Any]:

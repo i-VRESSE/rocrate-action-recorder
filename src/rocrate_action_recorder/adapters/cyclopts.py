@@ -20,7 +20,7 @@ from rocrate_action_recorder.adapters.shared import (
     IOArgumentNames,
 )
 from rocrate_action_recorder.adapters.shared import (
-    value2paths as cyclopts_value2paths,
+    value2paths,
 )
 from rocrate_action_recorder.core import (
     IOArgumentPath,
@@ -50,8 +50,6 @@ OUTPUT_DIRS: LiteralString = "OUTPUT_DIRS"
 RECORD_TRIGGER: LiteralString = "RECORD_TRIGGER"
 """Marker for Annotated boolean argument that trigger recording."""
 
-_ORIGINAL_CYCLOPTS_APP_CALL = App.__call__
-
 _MARKER_TO_CATEGORY: dict[str, str] = {
     INPUT_FILE: "input_files",
     INPUT_FILES: "input_files",
@@ -77,23 +75,14 @@ def _collect_subcommands(
     Returns:
         Dictionary mapping command names to Program objects.
     """
-    if seen is None:
-        seen = set()
-
-    # Track this app to avoid infinite recursion
-    app_id = " ".join(app.name) if isinstance(app.name, tuple) else (app.name or "")
-    if app_id in seen:
-        return {}
-    seen.add(app_id)
-
     subcommands_dict: dict[str, Program] = {}
 
     for sub_app in app.subapps:
-        # Skip built-in help/version subapps
-        # TODO install completion sub app
+        # Skip built-in subapps
         if sub_app.name in (
             ("help-print",),
             ("version-print",),
+            ("install-completion-command",),
         ):
             continue
 
@@ -197,13 +186,6 @@ def _is_attrs_instance(value: Any) -> bool:
         return False
 
 
-def _get_namedtuple_fields(value: Any) -> list[str]:
-    """Get field names from a NamedTuple."""
-    if hasattr(value, "_fields"):
-        return list(value._fields)
-    return []
-
-
 def _lookup_argument_value(arguments: dict[str, Any], field_name: str) -> Any | None:
     """Resolve an argument value from Cyclopts bound arguments.
 
@@ -231,15 +213,6 @@ def _lookup_argument_value(arguments: dict[str, Any], field_name: str) -> Any | 
 
     def search(value: Any) -> Any | None:
         if value is None:
-            return None
-
-        if isinstance(value, dict):
-            if field_name in value:
-                return value[field_name]
-            for nested_value in value.values():
-                resolved = search(nested_value)
-                if resolved is not None:
-                    return resolved
             return None
 
         if is_dataclass(value):
@@ -280,37 +253,12 @@ def _lookup_argument_value(arguments: dict[str, Any], field_name: str) -> Any | 
                         return resolved
             return None
 
-        # Check for NamedTuple
-        namedtuple_fields = _get_namedtuple_fields(value)
-        if namedtuple_fields:
-            if field_name in namedtuple_fields:
-                return getattr(value, field_name)
-            for nested_name in namedtuple_fields:
-                resolved = search(getattr(value, nested_name))
-                if resolved is not None:
-                    return resolved
-            return None
-
         # Handle tuples (e.g., from *args)
         if isinstance(value, tuple):
-            # Check if this is a tuple of tuples (Cyclopts *args format)
-            # e.g., ((Path1,), (Path2,)) for *files: tuple[Path, ...]
-            if value and all(isinstance(item, tuple) for item in value):
-                # Flatten nested tuples and collect all path-like items
-                for item in value:
-                    if isinstance(item, tuple):
-                        for sub_item in item:
-                            if isinstance(sub_item, Path):
-                                return sub_item
-                            resolved = search(sub_item)
-                            if resolved is not None:
-                                return resolved
-            else:
-                # Regular tuple, search each item
-                for item in value:
-                    resolved = search(item)
-                    if resolved is not None:
-                        return resolved
+            for item in value:
+                resolved = search(item)
+                if resolved is not None:
+                    return resolved
             return None
 
         if hasattr(value, field_name):
@@ -342,18 +290,6 @@ def _lookup_nested_field(value: Any, field_path: str) -> Any | None:
     if value is None:
         return None
 
-    # Handle dict
-    if isinstance(value, dict):
-        if current_field in value:
-            current_value = value[current_field]
-        else:
-            # Search recursively
-            current_value = None
-            for v in value.values():
-                found = _lookup_nested_field(v, field_path)
-                if found is not None:
-                    return found
-            return None
     # Handle dataclass
     elif is_dataclass(value):
         if hasattr(value, current_field):
@@ -368,12 +304,6 @@ def _lookup_nested_field(value: Any, field_path: str) -> Any | None:
             return None
     # Handle attrs instance
     elif _is_attrs_instance(value):
-        if hasattr(value, current_field):
-            current_value = getattr(value, current_field)
-        else:
-            return None
-    # Handle NamedTuple
-    elif _get_namedtuple_fields(value):
         if hasattr(value, current_field):
             current_value = getattr(value, current_field)
         else:
@@ -431,7 +361,7 @@ def _collect_ioargs(
                     f"Argument name '{name}' does not exist in parsed Cyclopts args."
                 )
                 continue
-            paths = cyclopts_value2paths(value)
+            paths = value2paths(value)
             if not paths:
                 logger.warning(
                     f"Argument name '{name}' has no associated path-like argument value(s)."
@@ -472,10 +402,6 @@ def _extract_markers_from_pydantic_fields(
     for field_name, field_info in fields.items():
         field_path = f"{prefix}.{field_name}" if prefix else field_name
         ann = field_info.annotation
-        if hasattr(ann, "__metadata__"):
-            for meta in ann.__metadata__:
-                if meta in _MARKER_TO_CATEGORY or meta == RECORD_TRIGGER:
-                    markers.append((field_path, meta))
 
         # Recursively check nested Pydantic models
         if _is_pydantic_model_type(ann):
@@ -517,41 +443,6 @@ def _extract_markers_from_attrs_fields(
     return markers
 
 
-def _extract_markers_from_namedtuple_fields(
-    namedtuple_cls: Any, prefix: str = ""
-) -> list[tuple[str, str]]:
-    """Extract markers from NamedTuple fields.
-
-    Args:
-        namedtuple_cls: NamedTuple class.
-        prefix: Field name prefix for nested fields.
-
-    Returns:
-        List of (field_path, marker) tuples.
-    """
-    markers: list[tuple[str, str]] = []
-    fields = getattr(namedtuple_cls, "_field_types", None) or getattr(
-        namedtuple_cls, "__annotations__", None
-    )
-    if not fields:
-        return markers
-
-    for field_name, field_type in fields.items():
-        field_path = f"{prefix}.{field_name}" if prefix else field_name
-        if hasattr(field_type, "__metadata__"):
-            for meta in field_type.__metadata__:
-                if meta in _MARKER_TO_CATEGORY or meta == RECORD_TRIGGER:
-                    markers.append((field_path, meta))
-
-        # Recursively check nested NamedTuples
-        if _is_namedtuple_type(field_type):
-            markers.extend(
-                _extract_markers_from_namedtuple_fields(field_type, field_path)
-            )
-
-    return markers
-
-
 def _is_pydantic_model_type(ann: Any) -> bool:
     """Check if an annotation is a Pydantic BaseModel class."""
     try:
@@ -569,20 +460,6 @@ def _is_attrs_type(ann: Any) -> bool:
 
         return isinstance(ann, type) and attrs.has(ann)
     except (ImportError, TypeError):
-        return False
-
-
-def _is_namedtuple_type(ann: Any) -> bool:
-    """Check if an annotation is a NamedTuple class."""
-    try:
-        from typing import get_origin
-
-        if get_origin(ann) is tuple:
-            return True
-        if isinstance(ann, type):
-            return issubclass(ann, tuple) and hasattr(ann, "_fields")
-        return False
-    except (TypeError, ImportError):
         return False
 
 
@@ -638,18 +515,6 @@ def _detect_ios_and_trigger(
             if _is_attrs_instance(value):
                 attrs_cls = type(value)
                 markers = _extract_markers_from_attrs_fields(attrs_cls, prefix)
-                for field_path, meta in markers:
-                    if meta in _MARKER_TO_CATEGORY:
-                        getattr(ios, _MARKER_TO_CATEGORY[meta]).append(field_path)
-                    elif meta == RECORD_TRIGGER and record_trigger_name is None:
-                        record_trigger_name = field_path
-
-            namedtuple_fields = _get_namedtuple_fields(value)
-            if namedtuple_fields:
-                namedtuple_cls = type(value)
-                markers = _extract_markers_from_namedtuple_fields(
-                    namedtuple_cls, prefix
-                )
                 for field_path, meta in markers:
                     if meta in _MARKER_TO_CATEGORY:
                         getattr(ios, _MARKER_TO_CATEGORY[meta]).append(field_path)
@@ -789,7 +654,6 @@ def collect_info(
     return Info(program=program, ioargs=ioargs, should_record=should_record, argv=argv)
 
 
-# TODO rename to record onces fully tested
 @contextmanager
 def record_cyclopts(
     app: App,
