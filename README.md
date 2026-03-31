@@ -14,7 +14,12 @@ Useful to track which commands were executed, which files were used as input or 
 
 Supports [RO-Crate 1.1](https://www.researchobject.org/ro-crate/specification/1.1/index.html) specification.
 Specifically the [Process Run Crate profile](https://www.researchobject.org/workflow-run-crate/profiles/0.5/process_run_crate/).
-Provides adapters for `argparse`, `cyclopts` and `click` based CLIs.
+
+Provides adapters for CLIs based on (links go to examples)
+
+* [argparse](https://github.com/i-VRESSE/rocrate-action-recorder/tree/main/example/argparse)
+* [click](https://github.com/i-VRESSE/rocrate-action-recorder/tree/main/example/click)
+* [cyclopts](https://github.com/i-VRESSE/rocrate-action-recorder/tree/main/example/cyclopts)
 
 ## Install
 
@@ -22,13 +27,13 @@ Provides adapters for `argparse`, `cyclopts` and `click` based CLIs.
 pip install rocrate-action-recorder
 ```
 
-For Click support, install the optional extra:
+For [Click](https://click.palletsprojects.com/en/stable/) support, install the optional extra:
 
 ```shell
 pip install "rocrate-action-recorder[click]"
 ```
 
-For Cyclopts support, install the optional extra:
+For [Cyclopts](https://github.com/BrianPugh/cyclopts) support, install the optional extra:
 
 ```shell
 pip install "rocrate-action-recorder[cyclopts]"
@@ -71,175 +76,13 @@ args = parser.parse_args()
 handler(args)
 ```
 
-<details>
-<summary>
-Will generate a `ro-crate-metadata.json` file in the current working directory describing the execution of the CLI command. (Click me to see crate content)
-</summary>
-
-```json
-{
-    "@context": [
-        "https://w3id.org/ro/crate/1.1/context",
-        "https://w3id.org/ro/terms/workflow-run/context"
-    ],
-    "@graph": [
-        {
-            "@id": "./",
-            "@type": "Dataset",
-            "conformsTo": {
-                "@id": "https://w3id.org/ro/wfrun/process/0.5"
-            },
-            "datePublished": "2026-01-28T15:07:18.600135",
-            "description": "An RO-Crate recording the files and directories that were used as input or output by example-cli.",
-            "hasPart": [
-                {
-                    "@id": "input.txt"
-                },
-                {
-                    "@id": "output.txt"
-                }
-            ],
-            "license": "CC-BY-4.0",
-            "name": "Files used by example-cli"
-        },
-        {
-            "@id": "ro-crate-metadata.json",
-            "@type": "CreativeWork",
-            "about": {
-                "@id": "./"
-            },
-            "conformsTo": {
-                "@id": "https://w3id.org/ro/crate/1.1"
-            }
-        },
-        {
-            "@id": "https://w3id.org/ro/wfrun/process/0.5",
-            "@type": "CreativeWork",
-            "name": "Process Run Crate",
-            "version": "0.5"
-        },
-        {
-            "@id": "example-cli@1.2.3",
-            "@type": "SoftwareApplication",
-            "description": "Example CLI",
-            "name": "example-cli",
-            "version": "1.2.3"
-        },
-        {
-            "@id": "input.txt",
-            "@type": "File",
-            "contentSize": 5,
-            "description": "Input file",
-            "encodingFormat": "text/plain",
-            "name": "input.txt"
-        },
-        {
-            "@id": "output.txt",
-            "@type": "File",
-            "contentSize": 5,
-            "description": "Output file",
-            "encodingFormat": "text/plain",
-            "name": "output.txt"
-        },
-        {
-            "@id": "someuser",
-            "@type": "Person",
-            "name": "someuser"
-        },
-        {
-            "@id": "example-cli input.txt output.txt",
-            "@type": "CreateAction",
-            "agent": {
-                "@id": "someuser"
-            },
-            "endTime": "2026-01-28T15:07:18.600135",
-            "instrument": {
-                "@id": "example-cli@1.2.3"
-            },
-            "name": "example-cli input.txt output.txt",
-            "object": [
-                {
-                    "@id": "input.txt"
-                }
-            ],
-            "result": [
-                {
-                    "@id": "output.txt"
-                }
-            ],
-            "startTime": "2026-01-28T15:07:18.599714"
-        }
-    ]
-}
-```
-
-For you the startTime, endTime, and Person name will differ.
-
-</details>
-
-<details>
-<summary>
-You can also call the argument parser agnostic version of the recorder directly. (Click me to see code)
-</summary>
-
-```python
-from datetime import datetime, UTC
-from pathlib import Path
-
-from rocrate_action_recorder import (
-    IOArgumentPath,
-    IOArgumentPaths,
-    Program,
-    record,
-)
-
-crate_dir = Path()
-input_path = crate_dir / "input.txt"
-output_path = crate_dir / "output.txt"
-input_path.write_text("Hello World\n")
-argv = [
-    "myscript",
-    "--input",
-    str(input_path),
-    "--output",
-    str(output_path),
-]
-start_time = datetime(2026, 1, 16, 12, 0, 0, tzinfo=UTC)
-# Simulate the script's main operation
-output_path.write_text(input_path.read_text().upper())
-end_time = datetime(2026, 1, 16, 12, 0, 5, tzinfo=UTC)
-
-crate_meta = record(
-    program=Program(
-        name="myscript", description="My test script", version="1.2.3"
-    ),
-    ioargs=IOArgumentPaths(
-        input_files=[
-            IOArgumentPath(name="input", path=input_path, help="Input file")
-        ],
-        output_files=[
-            IOArgumentPath(name="output", path=output_path, help="Output file")
-        ],
-    ),
-    argv=argv,
-    current_user="tester",
-    start_time=start_time,
-    end_time=end_time,
-    crate_dir=crate_dir,
-    dataset_license="CC-BY-4.0",
-)
-# crate_meta == Path("ro-crate-metadata.json")
-```
-
-</details>
+After execution, a `ro-crate-metadata.json` file (like [this one](https://github.com/i-VRESSE/rocrate-action-recorder/raw/refs/heads/main/example/ro-crate-metadata.json)) will be generated in the current working directory, describing the execution of the CLI command.
 
 <!-- SPHINX-END -->
 
-## Example
+You can also call the low-level [record](https://rocrate-action-recorder.readthedocs.io/en/latest/autoapi/rocrate_action_recorder/core/index.html#rocrate_action_recorder.core.record) function directly. 
 
-* [argparse example](example/argparse/README.md)
-* [click example](example/click/README.md)
-* [cyclopts example](example/cyclopts/README.md)
+See [documentation](https://rocrate-action-recorder.readthedocs.io/en/latest/) for more details.
 
 ### Contributions
 

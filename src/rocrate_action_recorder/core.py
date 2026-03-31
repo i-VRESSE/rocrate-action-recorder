@@ -176,8 +176,60 @@ def record(
     """Record a CLI invocation in an RO-Crate.
 
     This is a low-level function, better use one of the adapter functions for specific
-    argument parsing frameworks.
-    For example use `record_with_argparse` for [argparse](https://docs.python.org/3/library/argparse.html).
+    argument parsing frameworks like :func:`record_argparse` or :func:`record_cyclopts`.
+
+    Example:
+
+        Example with single input and output file arguments:
+
+        .. code-block:: python
+
+            from datetime import datetime, UTC
+            from pathlib import Path
+
+            from rocrate_action_recorder import (
+                IOArgumentPath,
+                IOArgumentPaths,
+                Program,
+                record,
+            )
+
+            crate_dir = Path()
+            input_path = crate_dir / "input.txt"
+            output_path = crate_dir / "output.txt"
+            input_path.write_text("Hello World")
+            argv = [
+                "myscript",
+                "--input",
+                str(input_path),
+                "--output",
+                str(output_path),
+            ]
+            start_time = datetime(2026, 1, 16, 12, 0, 0, tzinfo=UTC)
+            # Simulate the script's main operation
+            output_path.write_text(input_path.read_text().upper())
+            end_time = datetime(2026, 1, 16, 12, 0, 5, tzinfo=UTC)
+
+            crate_meta = record(
+                program=Program(
+                    name="myscript", description="My test script", version="1.2.3"
+                ),
+                ioargs=IOArgumentPaths(
+                    input_files=[
+                        IOArgumentPath(name="input", path=input_path, help="Input file")
+                    ],
+                    output_files=[
+                        IOArgumentPath(name="output", path=output_path, help="Output file")
+                    ],
+                ),
+                argv=argv,
+                current_user="tester",
+                start_time=start_time,
+                end_time=end_time,
+                crate_dir=crate_dir,
+                dataset_license="CC-BY-4.0",
+            )
+            # crate_meta == Path("ro-crate-metadata.json")
 
     Args:
         program: The program details.
