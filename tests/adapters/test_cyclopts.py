@@ -1,8 +1,10 @@
 import asyncio
+import sys
 from io import BytesIO, TextIOWrapper
 from textwrap import dedent
 from dataclasses import dataclass
 from pathlib import Path
+from types import ModuleType
 from typing import Annotated
 
 from attrs import define
@@ -77,6 +79,27 @@ def assert_crate(
 def working_tmp_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.chdir(tmp_path)
     return tmp_path
+
+
+@pytest.fixture
+def lazy_module():
+    """Fixture that provides a helper to create lazy-loadable test modules.
+    
+    Copy of https://github.com/BrianPugh/cyclopts/blob/2cbfbb2af31ac240e01d24177155d6fd925037d2/tests/test_lazy_commands.py#L15-L40
+    """
+    created_modules: list[str] = []
+
+    def create(name: str = "test_lazy_module") -> ModuleType:
+        module = ModuleType(name)
+        sys.modules[name] = module
+        created_modules.append(name)
+        return module
+
+    yield create
+
+    for name in created_modules:
+        if name in sys.modules:
+            del sys.modules[name]
 
 
 class TestMarkerless:
@@ -1489,7 +1512,89 @@ class TestAttrs:
         assert output["description"] == "The output file path"
 
 
-# TODO test lazy loading, https://cyclopts.readthedocs.io/en/stable/lazy_loading.html#lazy-loading
+class TestLazyLoading:
+    def app_with_lazy_trigger_and_output(self, lazy_module) -> App:
+        module = lazy_module("test_lazy_adapter_output")
+
+        def export(
+            *,
+            output: Annotated[Path, OUTPUT_FILE],
+            prov: Annotated[bool, Parameter(negative=""), RECORD_TRIGGER] = False,
+        ) -> None:
+            output.write_text("DATA")
+            print(f"Provenance recording is {'enabled' if prov else 'disabled'}.")
+
+        module.export = export  # type: ignore[attr-defined]
+
+        app = App(name="myapp", result_action="return_value", version="1.0.0")
+        user_app = App(name="user")
+        app.command(user_app)
+        user_app.command("test_lazy_adapter_output:export")
+        return app
+
+    def test_lazy_subcommand_execution_records_crate(
+        self,
+        working_tmp_path: Path,
+        lazy_module,
+    ):
+        module = lazy_module("test_lazy_adapter_users")
+
+        def list_users() -> str:
+            print("listing users")
+            return "ok"
+
+        module.list_users = list_users  # type: ignore[attr-defined]
+
+        app = App(name="myapp", result_action="return_value", version="1.0.0")
+        user_app = App(name="user")
+        app.command(user_app)
+        user_app.command("test_lazy_adapter_users:list_users", name="list")
+
+        tokens = "user list"
+        with record_cyclopts(app, tokens=tokens):
+            app(tokens=tokens)
+
+        assert_crate(
+            working_tmp_path,
+            action_id="myapp user list",
+            input_ids=set(),
+            output_ids=set(),
+            instrument_id="myapp@1.0.0",
+        )
+
+    def test_lazy_subcommand_trigger_and_output_marker_trigger_off(
+        self,
+        working_tmp_path: Path,
+        lazy_module,
+    ):
+        app = self.app_with_lazy_trigger_and_output(lazy_module)
+
+        tokens = ["user", "export", "--output", "output.txt"]
+        with record_cyclopts(app, tokens=tokens):
+            app(tokens=tokens)
+
+        assert (working_tmp_path / "output.txt").read_text() == "DATA"
+        assert_no_crate(working_tmp_path)
+
+    def test_lazy_subcommand_trigger_and_output_marker_trigger_on(
+        self,
+        working_tmp_path: Path,
+        lazy_module,
+    ):
+        app = self.app_with_lazy_trigger_and_output(lazy_module)
+
+        tokens = ["user", "export", "--output", "output.txt", "--prov"]
+        with record_cyclopts(app, tokens=tokens):
+            app(tokens=tokens)
+
+        assert (working_tmp_path / "output.txt").read_text() == "DATA"
+        assert_crate(
+            working_tmp_path,
+            action_id="myapp user export --output output.txt --prov",
+            input_ids=set(),
+            output_ids={"output.txt"},
+            instrument_id="myapp@1.0.0",
+        )
 
 
 class Test_value2paths:
