@@ -1,17 +1,23 @@
 """Adapter for argparse CLI framework."""
 
-from argparse import _VersionAction, ArgumentParser, Namespace
+import logging
+from argparse import ArgumentParser, Namespace, _VersionAction
 from collections.abc import Callable
-from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from functools import wraps
 from pathlib import Path
 from typing import Any
-import logging
 
+from rocrate_action_recorder.adapters.shared import (
+    IOArgumentNames,
+    value2paths,
+)
+from rocrate_action_recorder.adapters.shared import (
+    try_convert_to_path as shared_try_convert_to_path,
+)
 from rocrate_action_recorder.core import (
-    IOArgumentPaths,
     IOArgumentPath,
+    IOArgumentPaths,
     Program,
     record,
 )
@@ -23,9 +29,7 @@ class MissingDestArgparseSubparserError(ValueError):
     """Raised when an argparse subparser is missing the 'dest' argument."""
 
     def __init__(self) -> None:
-        super().__init__(
-            "Argparse subparsers must have a 'dest' parameter defined to identify the chosen subcommand"
-        )
+        super().__init__("Argparse subparsers must have a 'dest' parameter defined to identify the chosen subcommand")
 
 
 def argparse_help(parser: ArgumentParser, ns: Namespace, arg_name: str) -> str | None:
@@ -56,28 +60,6 @@ def argparse_help(parser: ArgumentParser, ns: Namespace, arg_name: str) -> str |
                     return argparse_help(subparser, ns, arg_name)
 
 
-def try_convert_to_path(item: Any) -> Path | None:
-    """Try to convert a single item to a Path."""
-    if isinstance(item, Path):
-        return item
-    elif hasattr(item, "name"):
-        if (
-            item.name is None
-            or item.name == "<stdin>"
-            or item.name == "<stdout>"
-            or item.name == "-"
-        ):
-            logger.warning(
-                "Unable to convert stdin/stdout file-like object to Path, ignoring it"
-            )
-            return None
-        return Path(item.name)
-    elif item is None:
-        logger.warning("Unable to convert None to Path, ignoring it")
-        return None
-    return Path(item)
-
-
 def argparse_value2paths(v: Any) -> list[Path]:
     """Convert an argparse value to a list of Path objects.
 
@@ -90,28 +72,12 @@ def argparse_value2paths(v: Any) -> list[Path]:
     Returns:
         A list of deduplicated Path objects. Empty list if value is not path-like.
     """
-    paths: list[Path] = []
-    if isinstance(v, (list, tuple)):
-        # Handle lists and tuples
-        for item in v:
-            path = try_convert_to_path(item)
-            if path is not None:
-                paths.append(path)
-    else:
-        # Handle single values
-        path = try_convert_to_path(v)
-        if path is not None:
-            paths.append(path)
+    return value2paths(v)
 
-    # Deduplicate while preserving order (keep first occurrence)
-    seen: set[Path] = set()
-    deduplicated: list[Path] = []
-    for path in paths:
-        if path not in seen:
-            seen.add(path)
-            deduplicated.append(path)
 
-    return deduplicated
+def try_convert_to_path(item: Any) -> Path | None:
+    """Try to convert a single item to a Path."""
+    return shared_try_convert_to_path(item)
 
 
 def version_from_parser(parser: ArgumentParser) -> str | None:
@@ -135,9 +101,7 @@ def version_from_parser(parser: ArgumentParser) -> str | None:
     """
     for action in parser._actions:
         if isinstance(action, _VersionAction) and action.version is not None:
-            version = (
-                action.version.replace("%(prog)s", "").replace(parser.prog, "").strip()
-            )
+            version = action.version.replace("%(prog)s", "").replace(parser.prog, "").strip()
             return version
     return None
 
@@ -172,43 +136,16 @@ def program_from_parser(parser: ArgumentParser, ns: Namespace) -> Program:
     return program
 
 
-@dataclass
-class IOArgumentNames:
-    """Which argument names have values that are input/output files or directories.
-
-    Hint:
-        The argument names should be attributes on a :class:`argparse.Namespace` object
-        returned by :meth:`parse_args() <argparse.ArgumentParser.parse_args>`.
-        For example `parser.add_argument('--input-file')`
-        would correspond to argument name `input_file`.
-    """
-
-    input_files: list[str] = field(default_factory=list[str])
-    """List of argument names for input files."""
-    output_files: list[str] = field(default_factory=list[str])
-    """List of argument names for output files."""
-    input_dirs: list[str] = field(default_factory=list[str])
-    """List of argument names for input directories."""
-    output_dirs: list[str] = field(default_factory=list[str])
-    """List of argument names for output directories."""
-
-
-def map_name2paths(
-    parser: ArgumentParser, ns: Namespace, name: str
-) -> list[IOArgumentPath]:
+def map_name2paths(parser: ArgumentParser, ns: Namespace, name: str) -> list[IOArgumentPath]:
     value = getattr(ns, name)
     help = argparse_help(parser, ns, name) or ""
     paths = argparse_value2paths(value)
     if not paths:
-        logger.warning(
-            f"Argument name '{name}' has no associated path-like argument value(s)."
-        )
+        logger.warning(f"Argument name '{name}' has no associated path-like argument value(s).")
     return [IOArgumentPath(name=name, path=path, help=help) for path in paths]
 
 
-def map_names2paths(
-    parser: ArgumentParser, ns: Namespace, names: list[str]
-) -> list[IOArgumentPath]:
+def map_names2paths(parser: ArgumentParser, ns: Namespace, names: list[str]) -> list[IOArgumentPath]:
     args: list[IOArgumentPath] = []
     for name in names:
         paths = map_name2paths(parser, ns, name)
@@ -223,6 +160,13 @@ def collect_record_info_from_argparse(
     software_version: str | None = None,
 ) -> tuple[Program, IOArgumentPaths]:
     """Collect Program and IOArgumentPaths from argparse so it can be recorded as an action in RO-Crate.
+
+    Hint:
+        The argument names passed in :class:`IOArgumentNames` should be attributes on
+        a :class:`argparse.Namespace` object returned by
+        :meth:`parse_args() <argparse.ArgumentParser.parse_args>`.
+        For example `parser.add_argument('--input-file')` would correspond to argument
+        name `input_file`.
 
     Args:
         parser: The argparse.ArgumentParser used to parse the arguments.
@@ -294,9 +238,7 @@ def record_argparse(
         MissingDestArgparseSubparserError:
             If parser has subparsers but dest is not set.
     """
-    program, ioargs = collect_record_info_from_argparse(
-        parser, ns, ios, software_version=software_version
-    )
+    program, ioargs = collect_record_info_from_argparse(parser, ns, ios, software_version=software_version)
     return record(
         program=program,
         ioargs=ioargs,
@@ -383,9 +325,7 @@ def recorded_argparse[T](
 
             if enabled_argument is None or getattr(args, enabled_argument, False):
                 if crate_dir and crate_dir_argument:
-                    raise ValueError(
-                        "Cannot specify both crate_dir and crate_dir_argument"
-                    )
+                    raise ValueError("Cannot specify both crate_dir and crate_dir_argument")
                 my_crate_dir: Path | None = None
                 if crate_dir is not None:
                     my_crate_dir = crate_dir

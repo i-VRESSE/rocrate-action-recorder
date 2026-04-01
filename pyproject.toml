@@ -25,6 +25,12 @@ classifiers = [
 "Issues" = "https://github.com/i-VRESSE/rocrate-action-recorder/issues"
 "Documentation" = "https://rocrate-action-recorder.readthedocs.io/"
 
+[project.optional-dependencies]
+click = [
+  "click>=8.1.0",
+]
+cyclopts = ["cyclopts>=4.10.1"]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
@@ -41,9 +47,14 @@ typecheck = [
     "pyright>=1.1.408",
 ]
 test = [
+    "click>=8.1.0",
     "pytest>=9.0.2",
+    "pytest-asyncio>=0.21.0",
     "pytest-cov>=7.0.0",
     "roc-validator>=0.8.0",
+    "cyclopts>=4.10.1",
+    "pydantic>=2.0.0",
+    "attrs>=24.0.0",
 ]
 docs = [
     "sphinx>=9.1.0",
@@ -57,7 +68,7 @@ docs = [
 [tool.pytest]
 minversion = "9.0"
 strict = true
-addopts = ["--doctest-modules"]
+addopts = ["--doctest-modules", "--import-mode=importlib"]
 filterwarnings = [
   "error",
 ]
@@ -68,8 +79,28 @@ testpaths = [
 
 [tool.coverage]
 run.source = ["src"]
+run.branch = true
 
 [tool.pyright]
 include = ['src']
 pythonVersion = "3.14"
 pythonPlatform = "Linux"
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.isort]
+known-first-party = ["rocrate_action_recorder"]
+
+[tool.ruff.lint]
+select = [
+    "E",
+    "F",
+    "I",
+]
+ignore = [
+    "E501"
+]

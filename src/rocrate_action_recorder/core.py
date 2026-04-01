@@ -1,25 +1,25 @@
 """Core functionality for recording CLI invocations in RO-Crate format."""
 
-from dataclasses import dataclass, field
-from datetime import UTC, datetime
 import getpass
 import importlib.metadata
 import inspect
+import logging
 import mimetypes
 import os
 import pwd
-from pathlib import Path
 import shutil
 import subprocess
 import sys
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from pathlib import Path
 from shlex import quote
-import logging
 
 from rocrate.model import File
+from rocrate.model.creativework import CreativeWork
 from rocrate.model.dataset import Dataset
 from rocrate.model.person import Person
-from rocrate.model.creativework import CreativeWork
-from rocrate.rocrate import Entity, ROCrate, SoftwareApplication, Metadata
+from rocrate.rocrate import Entity, Metadata, ROCrate, SoftwareApplication
 
 logger = logging.getLogger(__name__)
 
@@ -132,9 +132,7 @@ def _dectect_version_by_running(program_name: str) -> str:
             return ""
 
     try:
-        result = subprocess.run(
-            [executable, "--version"], capture_output=True, text=True, timeout=5
-        )
+        result = subprocess.run([executable, "--version"], capture_output=True, text=True, timeout=5)
         if result.stdout:
             output = result.stdout.strip()
             # Remove script name from output by taking the last space-separated token
@@ -176,8 +174,60 @@ def record(
     """Record a CLI invocation in an RO-Crate.
 
     This is a low-level function, better use one of the adapter functions for specific
-    argument parsing frameworks.
-    For example use `record_with_argparse` for [argparse](https://docs.python.org/3/library/argparse.html).
+    argument parsing frameworks like :func:`record_argparse` or :func:`record_cyclopts`.
+
+    Example:
+
+        Example with single input and output file arguments:
+
+        .. code-block:: python
+
+            from datetime import datetime, UTC
+            from pathlib import Path
+
+            from rocrate_action_recorder import (
+                IOArgumentPath,
+                IOArgumentPaths,
+                Program,
+                record,
+            )
+
+            crate_dir = Path()
+            input_path = crate_dir / "input.txt"
+            output_path = crate_dir / "output.txt"
+            input_path.write_text("Hello World")
+            argv = [
+                "myscript",
+                "--input",
+                str(input_path),
+                "--output",
+                str(output_path),
+            ]
+            start_time = datetime(2026, 1, 16, 12, 0, 0, tzinfo=UTC)
+            # Simulate the script's main operation
+            output_path.write_text(input_path.read_text().upper())
+            end_time = datetime(2026, 1, 16, 12, 0, 5, tzinfo=UTC)
+
+            crate_meta = record(
+                program=Program(
+                    name="myscript", description="My test script", version="1.2.3"
+                ),
+                ioargs=IOArgumentPaths(
+                    input_files=[
+                        IOArgumentPath(name="input", path=input_path, help="Input file")
+                    ],
+                    output_files=[
+                        IOArgumentPath(name="output", path=output_path, help="Output file")
+                    ],
+                ),
+                argv=argv,
+                current_user="tester",
+                start_time=start_time,
+                end_time=end_time,
+                crate_dir=crate_dir,
+                dataset_license="CC-BY-4.0",
+            )
+            # crate_meta == Path("ro-crate-metadata.json")
 
     Args:
         program: The program details.
@@ -258,9 +308,7 @@ def build_software_application(crate: ROCrate, program: Program) -> SoftwareAppl
         A SoftwareApplication object.
     """
     software_version = program.version
-    software_id = (
-        f"{program.name}@{software_version}" if software_version else program.name
-    )
+    software_id = f"{program.name}@{software_version}" if software_version else program.name
     props = {
         "name": program.name,
         "description": program.description,
@@ -287,6 +335,8 @@ def add_software_application(crate: ROCrate, program: Program) -> SoftwareApplic
     same_version = sa and props.get("version") == program.version
     if not same_version:
         crate.add(software_app)
+    # TODO do something with subcommands? Add as separate SoftwareApplications with "isPartOf" relationship to main one?
+    # currently they are not added to crate
     return software_app
 
 
@@ -357,11 +407,7 @@ def add_file(crate: ROCrate, crate_root: Path, ioarg: IOArgumentPath) -> File:
     rpath = get_relative_path(path, crate_root)
     identifier = str(rpath)
     existing_file = crate.get(identifier)
-    if (
-        existing_file
-        and isinstance(existing_file, File)
-        and isinstance(existing_file.properties, dict)
-    ):
+    if existing_file and isinstance(existing_file, File) and isinstance(existing_file.properties, dict):
         existing_file.properties.update(
             {
                 "description": ioarg.help,
@@ -385,9 +431,7 @@ def add_file(crate: ROCrate, crate_root: Path, ioarg: IOArgumentPath) -> File:
     return file
 
 
-def add_files(
-    crate: ROCrate, crate_root: Path, ioargs: list[IOArgumentPath]
-) -> list[File]:
+def add_files(crate: ROCrate, crate_root: Path, ioargs: list[IOArgumentPath]) -> list[File]:
     """Add multiple files to the crate.
 
     Args:
@@ -430,9 +474,7 @@ def add_dir(crate: ROCrate, crate_root: Path, ioarg: IOArgumentPath) -> Dataset:
     return ds
 
 
-def add_dirs(
-    crate: ROCrate, crate_root: Path, ioargs: list[IOArgumentPath]
-) -> list[Dataset]:
+def add_dirs(crate: ROCrate, crate_root: Path, ioargs: list[IOArgumentPath]) -> list[Dataset]:
     """Add multiple directories to the crate.
 
     Args:
@@ -572,18 +614,10 @@ def conform_to_process_run_crate_profile(crate: ROCrate) -> CreativeWork:
     if not crate.get(prc.id):
         crate.add(prc)
 
-    if (
-        "conformsTo" not in crate.root_dataset
-        or crate.root_dataset["conformsTo"] != prc
-    ):
+    if "conformsTo" not in crate.root_dataset or crate.root_dataset["conformsTo"] != prc:
         crate.root_dataset["conformsTo"] = prc
-    if (
-        "https://w3id.org/ro/terms/workflow-run/context"
-        not in crate.metadata.extra_contexts
-    ):
-        crate.metadata.extra_contexts.append(
-            "https://w3id.org/ro/terms/workflow-run/context"
-        )
+    if "https://w3id.org/ro/terms/workflow-run/context" not in crate.metadata.extra_contexts:
+        crate.metadata.extra_contexts.append("https://w3id.org/ro/terms/workflow-run/context")
     return prc
 
 
@@ -618,12 +652,8 @@ def _update_crate(
 
     software = add_software_application(crate, program)
 
-    all_inputs = add_files(crate, crate_root, ioargs.input_files) + add_dirs(
-        crate, crate_root, ioargs.input_dirs
-    )
-    all_outputs = add_files(crate, crate_root, ioargs.output_files) + add_dirs(
-        crate, crate_root, ioargs.output_dirs
-    )
+    all_inputs = add_files(crate, crate_root, ioargs.input_files) + add_dirs(crate, crate_root, ioargs.input_dirs)
+    all_outputs = add_files(crate, crate_root, ioargs.output_files) + add_dirs(crate, crate_root, ioargs.output_dirs)
 
     agent = add_agent(crate, current_user)
 
@@ -645,7 +675,9 @@ def _update_crate(
     if not crate.name:
         crate.name = f"Files used by {program.name}"
     if not crate.description:
-        crate.description = f"An RO-Crate recording the files and directories that were used as input or output by {program.name}."
+        crate.description = (
+            f"An RO-Crate recording the files and directories that were used as input or output by {program.name}."
+        )
 
     return crate
 
