@@ -2,6 +2,7 @@
 
 <!-- SPHINX-START -->
 [![PyPI](https://img.shields.io/pypi/v/rocrate-action-recorder)](https://pypi.org/project/rocrate-action-recorder/)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19364813.svg)](https://doi.org/10.5281/zenodo.19364813)
 [![Research Software Directory Badge](https://img.shields.io/badge/rsd-00a3e3.svg)](https://research-software-directory.org/software/rocrate-action-recorder)
 [![github repo badge](https://img.shields.io/badge/github-repo-000.svg?logo=github&labelColor=gray&color=blue)](https://github.com/i-VRESSE/rocrate-action-recorder)
 [![github license badge](https://img.shields.io/github/license/i-VRESSE/rocrate-action-recorder)](https://github.com/i-VRESSE/rocrate-action-recorder)

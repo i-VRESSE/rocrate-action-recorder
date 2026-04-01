@@ -12,4 +12,7 @@ authors:
     given-names: Stefan
     orcid: "https://orcid.org/0000-0002-5821-2060"
 repository-code: https://github.com/i-VRESSE/rocrate-action-recorder
-
+identifiers:
+  - description: Latest version of software
+    type: doi
+    value: 10.5281/zenodo.19364813
