@@ -4,7 +4,7 @@ Calling the script with
 ./myscript.py --prov data/input.txt output.txt
 ```
 
-Would generate a [ro-crate-metadata.json](ro-crate-metadata.json) file.
+Would generate a `ro-crate-metadata.json` file.
 
 # Validate the RO-Crate
 

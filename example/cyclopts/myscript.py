@@ -12,9 +12,7 @@ from rocrate_action_recorder.adapters.cyclopts import (
     record_cyclopts,
 )
 
-app = App(
-    version="1.0.0",
-)
+app = App(version="1.0.0")
 
 
 @app.default
@@ -38,12 +36,9 @@ def main(
         input: The input file to read from.
         output: The output file to write to.
         prov: Whether to record provenance information.
-
-    Returns:
-        The number of characters written to the output file.
     """
     print(f"Provenance recording is {'enabled' if prov else 'disabled'}.")
-    return output.write_text(input.read_text().upper())
+    output.write_text(input.read_text().upper())
 
 
 if __name__ == "__main__":
