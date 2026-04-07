@@ -849,14 +849,12 @@ class TestSubcommands:
             instrument_id="myapp@1.0.0",
         )
 
-
     def test_subcommand_without_tokens(self):
         app = self.app_with_subcommand()
 
         tokens = []
         with record_cyclopts(app, tokens=tokens):
             app(tokens=tokens)
-
 
 
 class TestSubCommandWithTrigger:
