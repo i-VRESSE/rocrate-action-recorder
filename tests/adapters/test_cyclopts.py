@@ -850,6 +850,15 @@ class TestSubcommands:
         )
 
 
+    def test_subcommand_without_tokens(self):
+        app = self.app_with_subcommand()
+
+        tokens = []
+        with record_cyclopts(app, tokens=tokens):
+            app(tokens=tokens)
+
+
+
 class TestSubCommandWithTrigger:
     def app_with_subcommand_trigger(self) -> App:
         app = App(name="myapp", result_action="return_value", version="1.0.0")
@@ -940,6 +949,13 @@ class TestSubSubCommandWithTrigger:
         captured = capsys.readouterr()
         assert "Provenance recording is disabled." in captured.out
         assert_no_crate(working_tmp_path)
+
+    def test_subcommand_just_sub(self):
+        app = self.app_with_subsubcommand_trigger()
+
+        tokens = ["remote"]
+        with record_cyclopts(app, tokens=tokens):
+            app(tokens=tokens)
 
 
 class TestSingleMarkers:

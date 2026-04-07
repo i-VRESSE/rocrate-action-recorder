@@ -676,6 +676,8 @@ def collect_info(
     argv = _parse_tokens(tokens)
     command, bound_args, _ = app.parse_args(argv)
     executed_app = _resolve_executed_subapp(app, command) or app
+    if executed_app.default_command is None:
+        return Info(program=program, ioargs=IOArgumentPaths(), should_record=False, argv=argv)
     argument_collection = executed_app.assemble_argument_collection(parse_docstring=True)
     meta_argument_collection = None
     if hasattr(app.meta, "default_command") and app.meta.default_command:
