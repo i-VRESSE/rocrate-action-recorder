@@ -77,7 +77,7 @@ args = parser.parse_args()
 handler(args)
 ```
 
-After execution, a `ro-crate-metadata.json` file (like [this one](https://github.com/i-VRESSE/rocrate-action-recorder/raw/refs/heads/main/example/ro-crate-metadata.json)) will be generated in the current working directory, describing the execution of the CLI command.
+After execution, a `ro-crate-metadata.json` file (like [this one](https://github.com/i-VRESSE/rocrate-action-recorder/blob/main/example/argparse/ro-crate-metadata.json)) will be generated in the current working directory, describing the execution of the CLI command.
 
 <!-- SPHINX-END -->
 
