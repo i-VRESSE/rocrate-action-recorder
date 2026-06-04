@@ -3,7 +3,7 @@ from pathlib import Path
 import click
 import pytest
 from click.testing import CliRunner
-from rocrate.rocrate import Metadata
+from rocrate.rocrate import BASENAME
 
 from rocrate_action_recorder.adapters.click import (
     IOArgumentNames,
@@ -713,7 +713,7 @@ class Test_recorded_click:
 
             result = runner.invoke(handler, ["input.txt", "output.txt"])
 
-            crate_meta = Path(Metadata.BASENAME)
+            crate_meta = Path(BASENAME)
             assert result.exit_code == 0
             assert crate_meta.exists()
 
@@ -739,7 +739,7 @@ class Test_recorded_click:
 
             result = runner.invoke(handler, ["--no-record", "input.txt", "output.txt"])
 
-            crate_meta = Path(Metadata.BASENAME)
+            crate_meta = Path(BASENAME)
             assert result.exit_code == 0
             assert not crate_meta.exists()
 
@@ -765,7 +765,7 @@ class Test_recorded_click:
 
             result = runner.invoke(handler, ["input.txt", "output.txt"])
 
-            crate_meta = Path(Metadata.BASENAME)
+            crate_meta = Path(BASENAME)
             assert result.exit_code == 0
             assert crate_meta.exists()
 
@@ -798,7 +798,7 @@ class Test_recorded_click:
                 ["input.txt", "output.txt", "input_dir", "output_dir"],
             )
 
-            crate_meta = Path(Metadata.BASENAME)
+            crate_meta = Path(BASENAME)
             assert result.exit_code == 0
             assert crate_meta.exists()
             body = crate_meta.read_text()

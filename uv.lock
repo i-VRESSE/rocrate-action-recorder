@@ -240,7 +240,7 @@ wheels = [
 
 [[package]]
 name = "cyclopts"
-version = "4.10.1"
+version = "4.16.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "attrs" },
@@ -248,9 +248,9 @@ dependencies = [
     { name = "rich" },
     { name = "rich-rst" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/6c/c4/2ce2ca1451487dc7d59f09334c3fa1182c46cfcf0a2d5f19f9b26d53ac74/cyclopts-4.10.1.tar.gz", hash = "sha256:ad4e4bb90576412d32276b14a76f55d43353753d16217f2c3cd5bdceba7f15a0", size = 166623, upload-time = "2026-03-23T14:43:01.098Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/34/07/bf61d13de86d96a4c46aff00c9ca0eced44bcc8c3e16280605c1253e5720/cyclopts-4.16.1.tar.gz", hash = "sha256:8aa47bf92a5fb33abca5af05e576eecdb0d2f79893ad29238046df78370fc4a8", size = 181196, upload-time = "2026-05-25T15:29:08.518Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/8a/0b/2261922126b2e50c601fe22d7ff5194e0a4d50e654836260c0665e24d862/cyclopts-4.10.1-py3-none-any.whl", hash = "sha256:35f37257139380a386d9fe4475e1e7c87ca7795765ef4f31abba579fcfcb6ecd", size = 204331, upload-time = "2026-03-23T14:43:02.625Z" },
+    { url = "https://files.pythonhosted.org/packages/00/8d/7f362c2fb8ef4decd2160bc24d4292c6ca658cc6d9a161b89ca5122bbdbf/cyclopts-4.16.1-py3-none-any.whl", hash = "sha256:617795392c4113a2c2cc7af716f20244900e87f23daa05442d1268d81472a592", size = 219020, upload-time = "2026-05-25T15:29:09.646Z" },
 ]
 
 [[package]]
@@ -632,15 +632,15 @@ wheels = [
 
 [[package]]
 name = "pyright"
-version = "1.1.408"
+version = "1.1.410"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "nodeenv" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/74/b2/5db700e52554b8f025faa9c3c624c59f1f6c8841ba81ab97641b54322f16/pyright-1.1.408.tar.gz", hash = "sha256:f28f2321f96852fa50b5829ea492f6adb0e6954568d1caa3f3af3a5f555eb684", size = 4400578, upload-time = "2026-01-08T08:07:38.795Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/10/53/e4d8ea1391bd4355231be6f91bf239479aa0014260ed3fb5526eeb12a1f2/pyright-1.1.410.tar.gz", hash = "sha256:07a073b8ba6749826773c1269773efa11b93440d9a6aa60419d9a3172d6dc488", size = 4062013, upload-time = "2026-06-01T17:35:48.894Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/0c/82/a2c93e32800940d9573fb28c346772a14778b84ba7524e691b324620ab89/pyright-1.1.408-py3-none-any.whl", hash = "sha256:090b32865f4fdb1e0e6cd82bf5618480d48eecd2eb2e70f960982a3d9a4c17c1", size = 6399144, upload-time = "2026-01-08T08:07:37.082Z" },
+    { url = "https://files.pythonhosted.org/packages/d7/33/288b5868fa00846dacf249633719d747893e54aebd196b9968ac1878a5d3/pyright-1.1.410-py3-none-any.whl", hash = "sha256:5e961bed37cacf96b3f7cd7b1da39b350a9239aa2e69138d0e88f728cfaf296c", size = 6082448, upload-time = "2026-06-01T17:35:46.387Z" },
 ]
 
 [[package]]
@@ -839,7 +839,7 @@ wheels = [
 
 [[package]]
 name = "roc-validator"
-version = "0.8.0"
+version = "0.10.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "click" },
@@ -855,14 +855,14 @@ dependencies = [
     { name = "toml" },
     { name = "typos" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/31/c0/373ed96c0f6f7131c5a090007cecdf888d679c0396176ae329212eea11d8/roc_validator-0.8.0.tar.gz", hash = "sha256:e483d64bf1fcc94d44af475079f3e2a1a8053e083f279c0ccc2968973ddf6796", size = 111555, upload-time = "2026-01-07T14:41:52.993Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/6f/7b/052a2fc5c5480ad0b6c95d9ab01b47a9744fa7e4ffe6055cd80f55e7c96f/roc_validator-0.10.0.tar.gz", hash = "sha256:395a6d6ffe196ea836d900f594975d3932716657694f0a83b73e839ed83bf3ba", size = 144446, upload-time = "2026-06-01T15:35:41.738Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/be/36/650fce93dd5e24efd87d0c1c80465627a49107f7629a5d0b248ce4832e0c/roc_validator-0.8.0-py3-none-any.whl", hash = "sha256:5797c38848fecd4843d768aa6212a2da7eea4f941d477fa5b16679104a762b74", size = 221196, upload-time = "2026-01-07T14:41:51.477Z" },
+    { url = "https://files.pythonhosted.org/packages/99/60/2aa10669aa4e3adc75ec03299013ba2a45eedb0507bebacadd713b695d55/roc_validator-0.10.0-py3-none-any.whl", hash = "sha256:2789b154f8cf911197b8d321e7cce8a0fe5e0ba8cbc0f6d1b3461a5cdae00820", size = 274644, upload-time = "2026-06-01T15:35:40.176Z" },
 ]
 
 [[package]]
 name = "rocrate"
-version = "0.14.2"
+version = "0.15.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "arcp" },
@@ -871,9 +871,9 @@ dependencies = [
     { name = "python-dateutil" },
     { name = "requests" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/59/30/68e6a46f01c643d5af5e151afd69608dde4f9009191436db4c94432dcc92/rocrate-0.14.2.tar.gz", hash = "sha256:22263f149b17edeb0bb55cccbcc307917e93f62fe64cfcd14de53bbf1e561d10", size = 309959, upload-time = "2025-10-13T15:14:04.966Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ac/4f/bd59926cd240ed55309f8ea71b94c43802d85ef3e0d778ad3c78cfa872fc/rocrate-0.15.0.tar.gz", hash = "sha256:20f0b518dcb1efbf9d25833ec5c24586dee4c39201ed1024e2277a3cd171df3e", size = 320997, upload-time = "2026-04-13T09:19:32.177Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/cb/4c/d74018818d4cc53e113d6df178b4b8894b304b10abfa9f44eb89e3648a0d/rocrate-0.14.2-py3-none-any.whl", hash = "sha256:2fcb1452e81e2f54e4456a7d69c74b37a0a56e55a43428292f593d9deebc6de2", size = 340572, upload-time = "2025-10-13T15:14:03.862Z" },
+    { url = "https://files.pythonhosted.org/packages/38/81/c7fd0f15eb155fb74891fe9cd07f5c4838c509dc3e1b5da9da7d390b75a0/rocrate-0.15.0-py3-none-any.whl", hash = "sha256:faa7b8fe41f84a7a8085cf4e31a973565a391cc25a850e847cdab5c2c2e52cee", size = 349120, upload-time = "2026-04-13T09:19:30.744Z" },
 ]
 
 [[package]]
@@ -929,7 +929,7 @@ typecheck = [
 requires-dist = [
     { name = "click", marker = "extra == 'click'", specifier = ">=8.1.0" },
     { name = "cyclopts", marker = "extra == 'cyclopts'", specifier = ">=4.10.1" },
-    { name = "rocrate", specifier = ">=0.14.2" },
+    { name = "rocrate", specifier = "==0.15.0" },
 ]
 provides-extras = ["click", "cyclopts"]
 
@@ -937,13 +937,13 @@ provides-extras = ["click", "cyclopts"]
 dev = [
     { name = "attrs", specifier = ">=24.0.0" },
     { name = "click", specifier = ">=8.1.0" },
-    { name = "cyclopts", specifier = ">=4.10.1" },
+    { name = "cyclopts", specifier = ">=4.16.1" },
     { name = "pydantic", specifier = ">=2.0.0" },
-    { name = "pyright", specifier = ">=1.1.408" },
+    { name = "pyright", specifier = ">=1.1.410" },
     { name = "pytest", specifier = ">=9.0.2" },
     { name = "pytest-asyncio", specifier = ">=0.21.0" },
     { name = "pytest-cov", specifier = ">=7.0.0" },
-    { name = "roc-validator", specifier = ">=0.8.0" },
+    { name = "roc-validator", specifier = ">=0.10.0" },
 ]
 docs = [
     { name = "furo", specifier = ">=2023.8.17" },
@@ -956,14 +956,14 @@ docs = [
 test = [
     { name = "attrs", specifier = ">=24.0.0" },
     { name = "click", specifier = ">=8.1.0" },
-    { name = "cyclopts", specifier = ">=4.10.1" },
+    { name = "cyclopts", specifier = ">=4.16.1" },
     { name = "pydantic", specifier = ">=2.0.0" },
     { name = "pytest", specifier = ">=9.0.2" },
     { name = "pytest-asyncio", specifier = ">=0.21.0" },
     { name = "pytest-cov", specifier = ">=7.0.0" },
-    { name = "roc-validator", specifier = ">=0.8.0" },
+    { name = "roc-validator", specifier = ">=0.10.0" },
 ]
-typecheck = [{ name = "pyright", specifier = ">=1.1.408" }]
+typecheck = [{ name = "pyright", specifier = ">=1.1.410" }]
 
 [[package]]
 name = "roman-numerals"

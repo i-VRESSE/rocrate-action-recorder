@@ -7,7 +7,7 @@ authors = [
 ]
 requires-python = ">=3.13"
 dependencies = [
-    "rocrate>=0.14.2",
+    "rocrate==0.15.0",
 ]
 dynamic = ["version"]
 classifiers = [
@@ -44,15 +44,15 @@ dev = [
   {include-group = "test"}
 ]
 typecheck = [
-    "pyright>=1.1.408",
+    "pyright>=1.1.410",
 ]
 test = [
     "click>=8.1.0",
     "pytest>=9.0.2",
     "pytest-asyncio>=0.21.0",
     "pytest-cov>=7.0.0",
-    "roc-validator>=0.8.0",
-    "cyclopts>=4.10.1",
+    "roc-validator>=0.10.0",
+    "cyclopts>=4.16.1",
     "pydantic>=2.0.0",
     "attrs>=24.0.0",
 ]

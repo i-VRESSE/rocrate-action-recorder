@@ -18,7 +18,7 @@ from cyclopts.types import (
     StdioPath,
 )
 from pydantic import BaseModel
-from rocrate.rocrate import Metadata, ROCrate
+from rocrate.rocrate import BASENAME, ROCrate
 
 from rocrate_action_recorder.adapters.cyclopts import (
     INPUT_DIR,
@@ -36,7 +36,7 @@ from rocrate_action_recorder.adapters.shared import value2paths as value2paths
 
 
 def assert_no_crate(crate_dir: Path):
-    crate_path = crate_dir / Metadata.BASENAME
+    crate_path = crate_dir / BASENAME
     assert not crate_path.exists()
 
 
@@ -48,10 +48,10 @@ def assert_crate(
     output_ids: set[str] | None = None,
     instrument_id: str | None = None,
 ) -> tuple[ROCrate, dict]:
-    crate_path = crate_dir / Metadata.BASENAME
+    crate_path = crate_dir / BASENAME
     assert crate_path.exists()
 
-    crate = ROCrate(crate_dir)
+    crate = ROCrate(crate_dir, version="1.1")
     actions = crate.get_by_type("CreateAction", exact=True)
     assert len(actions) == 1, f"Expected exactly one CreateAction in the crate, found {len(actions)}"
     action = actions[0]

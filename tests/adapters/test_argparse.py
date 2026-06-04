@@ -2,7 +2,7 @@ from argparse import ArgumentParser, FileType, Namespace
 from pathlib import Path
 
 import pytest
-from rocrate.rocrate import Metadata
+from rocrate.rocrate import BASENAME
 
 from rocrate_action_recorder.adapters.argparse import (
     IOArgumentNames,
@@ -796,7 +796,7 @@ class Test_recorded_argparse:
         result = handler(args)
 
         assert result == 42
-        crate_meta = tmp_path / Metadata.BASENAME
+        crate_meta = tmp_path / BASENAME
         assert crate_meta.exists()
 
     def test_without_prov_arg(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
@@ -822,7 +822,7 @@ class Test_recorded_argparse:
         args = parser.parse_args([])
         handler(args)
 
-        crate_meta = tmp_path / Metadata.BASENAME
+        crate_meta = tmp_path / BASENAME
         assert not crate_meta.exists()
 
     def test_with_truthy_prov_arg(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
@@ -848,7 +848,7 @@ class Test_recorded_argparse:
         args = parser.parse_args(["--prov"])
         handler(args)
 
-        crate_meta = tmp_path / Metadata.BASENAME
+        crate_meta = tmp_path / BASENAME
         assert crate_meta.exists()
 
     def test_with_all_ios(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
@@ -881,7 +881,7 @@ class Test_recorded_argparse:
         args = parser.parse_args([str(input_file), str(output_file), str(input_dir), str(output_dir)])
         handler(args)
 
-        crate_meta = tmp_path / Metadata.BASENAME
+        crate_meta = tmp_path / BASENAME
         assert crate_meta.exists()
         body = crate_meta.read_text()
         assert "input.txt" in body
@@ -915,7 +915,7 @@ class Test_recorded_argparse:
         args = parser.parse_args([str(input_file)])
         handler(args)
 
-        crate_meta = crate_dir / Metadata.BASENAME
+        crate_meta = crate_dir / BASENAME
         assert crate_meta.exists()
 
     def test_with_crate_dir_argument(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
@@ -941,7 +941,7 @@ class Test_recorded_argparse:
         args = parser.parse_args(["--session-dir", str(session_dir)])
         handler(args)
 
-        crate_meta = session_dir / Metadata.BASENAME
+        crate_meta = session_dir / BASENAME
         assert crate_meta.exists()
 
     def test_with_crate_dir_and_crate_dir_argument(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
@@ -990,7 +990,7 @@ class Test_recorded_argparse:
         args._parser = parser  # Inject the parser into args
         handler(args)
 
-        crate_meta = tmp_path / Metadata.BASENAME
+        crate_meta = tmp_path / BASENAME
         assert crate_meta.exists()
 
     def test_without_parser_or_parser_argument(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
