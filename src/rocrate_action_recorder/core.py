@@ -19,7 +19,7 @@ from rocrate.model import File
 from rocrate.model.creativework import CreativeWork
 from rocrate.model.dataset import Dataset
 from rocrate.model.person import Person
-from rocrate.rocrate import Entity, Metadata, ROCrate, SoftwareApplication
+from rocrate.rocrate import BASENAME, Entity, ROCrate, SoftwareApplication
 
 logger = logging.getLogger(__name__)
 
@@ -554,9 +554,9 @@ def _record_run(
     Returns:
         Path to the ro-crate-metadata.json file.
     """
-    metadata_file = crate_root / Metadata.BASENAME
+    metadata_file = crate_root / BASENAME
     source_dir: Path | None = crate_root if metadata_file.exists() else None
-    crate = ROCrate(source_dir)
+    crate = ROCrate(source_dir, version="1.1")
 
     _update_crate(
         crate=crate,
@@ -692,11 +692,11 @@ def playback(crate_root: Path) -> str:
         Newline-separated string of action command lines, sorted by endTime.
         Returns empty string if no actions are recorded.
     """
-    metadata_file = crate_root / Metadata.BASENAME
+    metadata_file = crate_root / BASENAME
     if not metadata_file.exists():
         return ""
 
-    crate = ROCrate(crate_root)
+    crate = ROCrate(crate_root, version="1.1")
 
     # Extract all CreateActions from the crate (supports UpdateActions when implemented)
     actions = []
