@@ -690,8 +690,7 @@ def playback(crate_root: Path) -> Generator[str]:
         crate_root: Root directory of the RO-Crate.
 
     Yields:
-        Newline-separated string of action command lines, sorted by endTime.
-        Returns empty string if no actions are recorded.
+        Yields strings of action command lines, sorted by endTime.
     """
     metadata_file = crate_root / BASENAME
     if not metadata_file.exists():
