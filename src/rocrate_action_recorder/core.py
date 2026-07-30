@@ -10,6 +10,7 @@ import pwd
 import shutil
 import subprocess
 import sys
+from collections.abc import Generator
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -682,19 +683,19 @@ def _update_crate(
     return crate
 
 
-def playback(crate_root: Path) -> str:
+def playback(crate_root: Path) -> Generator[str]:
     """Extract and return recorded action commands sorted by execution time.
 
     Args:
         crate_root: Root directory of the RO-Crate.
 
-    Returns:
+    Yields:
         Newline-separated string of action command lines, sorted by endTime.
         Returns empty string if no actions are recorded.
     """
     metadata_file = crate_root / BASENAME
     if not metadata_file.exists():
-        return ""
+        return
 
     crate = ROCrate(crate_root, version="1.1")
 
@@ -710,5 +711,5 @@ def playback(crate_root: Path) -> str:
     # Sort by endTime
     actions.sort(key=lambda x: x[0])
 
-    # Return newline-separated action IDs
-    return "\n".join(action_id for _, action_id in actions)
+    for _, action_id in actions:
+        yield action_id
