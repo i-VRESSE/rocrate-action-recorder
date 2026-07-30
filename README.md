@@ -57,6 +57,7 @@ parser.add_argument("--no-record", action="store_false", help="Disable RO-Crate 
 parser.add_argument("input", type=Path, help="Input file")
 parser.add_argument("output", type=Path, help="Output file")
 
+
 @recorded_argparse(
     parser=parser,
     input_files=["input"],
@@ -67,6 +68,7 @@ parser.add_argument("output", type=Path, help="Output file")
 def handler(args: argparse.Namespace):
     # For demonstration, just upper case input to output, replace with real logic
     args.output.write_text(args.input.read_text().upper())
+
 
 # Prepare input
 Path("input.txt").write_text("hello")

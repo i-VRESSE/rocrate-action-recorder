@@ -148,8 +148,8 @@ def test_detect_software_version_scriptinpath():
 
 def test_playback_empty_crate(tmp_path: Path):
     """Test playback returns empty string when no crate exists."""
-    result = playback(tmp_path)
-    assert result == ""
+    result = list(playback(tmp_path))
+    assert result == []
 
 
 def test_playback_single_action(tmp_path: Path):
@@ -216,8 +216,8 @@ def test_playback_single_action(tmp_path: Path):
     metadata_file = crate_dir / "ro-crate-metadata.json"
     metadata_file.write_text(json.dumps(metadata, indent=2))
 
-    result = playback(crate_dir)
-    assert result == "myscript --somearg"
+    result = list(playback(crate_dir))
+    assert result == ["myscript --somearg"]
 
 
 def test_playback_multiple_actions_sorted_by_endtime(tmp_path: Path):
@@ -315,8 +315,7 @@ def test_playback_multiple_actions_sorted_by_endtime(tmp_path: Path):
     metadata_file = crate_dir / "ro-crate-metadata.json"
     metadata_file.write_text(json.dumps(metadata, indent=2))
 
-    result = playback(crate_dir)
-    lines = result.split("\n")
+    lines = list(playback(crate_dir))
 
     # Should be sorted by endTime (converter first at 10:00:05, analyzer second at 10:00:15)
     assert len(lines) == 2
