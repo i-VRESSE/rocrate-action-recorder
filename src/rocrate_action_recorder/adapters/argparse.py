@@ -275,6 +275,43 @@ def recorded_argparse[T](
         A RO-Crate can only be written to the directory that
         contains all the input/output files and directories.
 
+    Examples:
+        Basic usage with parser_argument and positional files::
+
+            parser = ArgumentParser(prog="myscript")
+            parser.add_argument("input", type=Path, help="Input file")
+            parser.add_argument("output", type=Path, help="Output file")
+
+            @recorded_argparse(
+                parser_argument="_parser",
+                input_files=["input"],
+                output_files=["output"],
+                dataset_license="CC-BY-4.0",
+            )
+            def handler(args: Namespace) -> None:
+                args.output.write_text(args.input.read_text().upper())
+
+            # Call as: python myscript.py input.txt output.txt
+
+        Toggle recording with a boolean Namespace attribute::
+
+            parser = ArgumentParser(prog="myscript")
+            parser.add_argument("--record", action="store_true", help="Enable recording")
+            parser.add_argument("input", type=Path, help="Input file")
+            parser.add_argument("output", type=Path, help="Output file")
+
+            @recorded_argparse(
+                parser_argument="_parser",
+                input_files=["input"],
+                output_files=["output"],
+                enabled_argument="record",
+            )
+            def handler(args: Namespace) -> None:
+                args.output.write_text(args.input.read_text().upper())
+
+            # Records only when --record is passed.
+            # Call as: python myscript.py --record input.txt output.txt
+
     Args:
         parser: The argument parser used to parse the command-line arguments.
             This is needed to extract program information and help texts for the arguments.

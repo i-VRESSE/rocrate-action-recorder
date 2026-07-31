@@ -227,6 +227,40 @@ def recorded_click[T](
         names). For example `@click.option('--input-file')` usually corresponds to
         parameter name `input_file`.
 
+    Examples:
+        Basic usage with positional input/output arguments::
+
+            @click.command(name="myscript")
+            @click.argument("input", type=click.Path(path_type=Path, exists=True))
+            @click.argument("output", type=click.Path(path_type=Path))
+            @recorded_click(
+                input_files=["input"],
+                output_files=["output"],
+                dataset_license="CC-BY-4.0",
+            )
+            def cli(input: Path, output: Path) -> None:
+                output.write_text(input.read_text().upper())
+
+            # Call as: python myscript.py input.txt output.txt
+
+        Toggle recording with an explicit flag::
+
+            @click.command(name="myscript")
+            @click.option("--record/--no-record", default=True, help="Enable recording")
+            @click.argument("input", type=click.Path(path_type=Path, exists=True))
+            @click.argument("output", type=click.Path(path_type=Path))
+            @recorded_click(
+                input_files=["input"],
+                output_files=["output"],
+                enabled_argument="record",
+            )
+            def cli(record: bool, input: Path, output: Path) -> None:
+                _ = record
+                output.write_text(input.read_text().upper())
+
+            # Records only when --record is true.
+            # Call as: python myscript.py --no-record input.txt output.txt
+
     Args:
         input_dirs: Parameter names representing input directories.
         output_dirs: Parameter names representing output directories.

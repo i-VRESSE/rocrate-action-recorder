@@ -811,16 +811,149 @@ def record_cyclopts(
     """Context manager to record a Cyclopts CLI invocation in an RO-Crate.
 
     Hint:
-        The argument names passed in :class:`IOArgumentNames` should match keys in
-        the bound arguments (typically from `app.parse_args()` or the decorated function
-        arguments). For example `def myfunc(input: Path, output: Path)` would correspond
-        to parameter names `input` and `output`.
+        Marker metadata (for example :data:`INPUT_FILE` and :data:`OUTPUT_FILE`)
+        is auto-detected from ``typing.Annotated`` parameters and nested models.
+        Recording writes ``ro-crate-metadata.json`` only when execution finishes
+        successfully and recording is enabled.
+
+    Examples:
+        Full runnable example:
+        https://github.com/i-VRESSE/rocrate-action-recorder/tree/main/example/cyclopts
+
+        Basic positional input/output tracking::
+
+            from pathlib import Path
+            from typing import Annotated
+
+            from cyclopts import App
+            from rocrate_action_recorder.adapters.cyclopts import (
+                INPUT_FILE,
+                OUTPUT_FILE,
+                record_cyclopts,
+            )
+
+            app = App(version="1.2.3")
+
+            @app.default
+            def main(
+                input: Annotated[Path, INPUT_FILE],
+                output: Annotated[Path, OUTPUT_FILE],
+                /,
+            ):
+                output.write_text(input.read_text().upper())
+
+            # Call as: myscript.py input.txt output.txt
+            with record_cyclopts(app, dataset_license="CC-BY-4.0"):
+                app()
+
+        Toggle recording with a boolean trigger flag::
+
+            from typing import Annotated
+
+            from cyclopts import App, Parameter
+            from rocrate_action_recorder.adapters.cyclopts import RECORD_TRIGGER, record_cyclopts
+
+            app = App()
+
+            @app.default
+            def main(*, prov: Annotated[bool, Parameter(negative=""), RECORD_TRIGGER] = False):
+                pass
+
+            # Records only when --prov is passed.
+            # Call as: myscript.py --prov
+            with record_cyclopts(app):
+                app()
+
+        Track nested configuration fields (for example dataclass or Pydantic models)::
+
+            from dataclasses import dataclass
+            from pathlib import Path
+            from typing import Annotated
+
+            from cyclopts import App
+            from rocrate_action_recorder.adapters.cyclopts import INPUT_FILE, OUTPUT_FILE, record_cyclopts
+
+            @dataclass
+            class IO:
+                input: Annotated[Path, INPUT_FILE]
+                output: Annotated[Path, OUTPUT_FILE]
+
+            app = App()
+
+            @app.default
+            def main(io: IO):
+                io.output.write_text(io.input.read_text().upper())
+
+            # Call as: myscript.py input.txt output.txt
+            with record_cyclopts(app):
+                app()
+
+        Record multiple inputs/outputs from list markers::
+
+            from pathlib import Path
+            from typing import Annotated
+
+            from cyclopts import App
+            from rocrate_action_recorder.adapters.cyclopts import (
+                INPUT_FILES,
+                OUTPUT_FILES,
+                record_cyclopts,
+            )
+
+            app = App()
+
+            @app.default
+            def main(
+                *,
+                inputs: Annotated[list[Path], INPUT_FILES],
+                outputs: Annotated[list[Path], OUTPUT_FILES],
+            ):
+                for src, dst in zip(inputs, outputs, strict=True):
+                    dst.write_text(src.read_text().upper())
+
+            # Call as: myscript.py --inputs in1.txt --inputs in2.txt --outputs out1.txt --outputs out2.txt
+            with record_cyclopts(app):
+                app()
+
+        Let CLI arguments choose the crate destination using :data:`CRATE_DIR`::
+
+            from pathlib import Path
+            from typing import Annotated
+
+            from cyclopts import App
+            from rocrate_action_recorder.adapters.cyclopts import CRATE_DIR, record_cyclopts
+
+            app = App()
+
+            @app.default
+            def main(*, session_dir: Annotated[Path, CRATE_DIR]):
+                pass
+
+            # The CRATE_DIR-marked value overrides record_cyclopts(crate_dir=...).
+            # Call as: myscript.py --session-dir ./runs/session-001
+            with record_cyclopts(app, crate_dir=Path("fallback-crate")):
+                app()
+
+        Subcommands are supported; wrap the root app once and invoke normally::
+
+            app = App(name="tool")
+            process = App(name="process")
+
+            @process.default
+            def run(...):
+                ...
+
+            app.command(process)
+            # Call as: tool process
+            with record_cyclopts(app):
+                app()
 
     Args:
         app: Root Cyclopts App instance.
-        tokens: Optional command arguments to use in action id.
+        tokens: Optional command arguments used for parsing and action id generation.
         dataset_license: Optional dataset license string. If absent ro-crate will be invalid.
         crate_dir: Optional path to RO-Crate directory.
+            If a parsed argument is annotated with :data:`CRATE_DIR`, that value takes precedence.
         software_version: Optional software version override. Otherwise extracted from App instance.
         current_user: Optional user override. Uses current system user if None.
     """

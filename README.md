@@ -16,11 +16,11 @@ Useful to track which commands were executed, which files were used as input or 
 Supports [RO-Crate 1.1](https://www.researchobject.org/ro-crate/specification/1.1/index.html) specification.
 Specifically the [Process Run Crate profile](https://www.researchobject.org/workflow-run-crate/profiles/0.5/process_run_crate/).
 
-Provides adapters for CLIs based on (links go to examples)
+Provides adapters for CLIs based on:
 
-* [argparse](https://github.com/i-VRESSE/rocrate-action-recorder/tree/main/example/argparse)
-* [click](https://github.com/i-VRESSE/rocrate-action-recorder/tree/main/example/click)
-* [cyclopts](https://github.com/i-VRESSE/rocrate-action-recorder/tree/main/example/cyclopts)
+* argparse [example](https://github.com/i-VRESSE/rocrate-action-recorder/tree/main/example/argparse "Example CLI implementation using argparse") [usage docs](https://rocrate-action-recorder.readthedocs.io/en/latest/autoapi/rocrate_action_recorder/adapters/argparse/index.html#rocrate_action_recorder.adapters.argparse.recorded_argparse "Usage documentation for the argparse adapter") [homepage](https://docs.python.org/3/library/argparse.html "Official argparse documentation")
+* click [example](https://github.com/i-VRESSE/rocrate-action-recorder/tree/main/example/click "Example CLI implementation using click") [usage docs](https://rocrate-action-recorder.readthedocs.io/en/latest/autoapi/rocrate_action_recorder/adapters/click/index.html#rocrate_action_recorder.adapters.click.recorded_click "Usage documentation for the click adapter") [homepage](https://click.palletsprojects.com/ "Official click documentation")
+* cyclopts [example](https://github.com/i-VRESSE/rocrate-action-recorder/tree/main/example/cyclopts "Example CLI implementation using cyclopts") [usage docs](https://rocrate-action-recorder.readthedocs.io/en/latest/autoapi/rocrate_action_recorder/adapters/cyclopts/index.html#rocrate_action_recorder.adapters.cyclopts.record_cyclopts "Usage documentation for the cyclopts adapter") [homepage](https://github.com/BrianPugh/cyclopts "Official cyclopts documentation")
 
 ## Install
 
