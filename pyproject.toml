@@ -2,13 +2,9 @@
 name = "rocrate-action-recorder"
 description = "Record calls of Python CLI commands into a Research Object Crate"
 readme = "README.md"
-authors = [
-    { name = "Stefan Verhoeven", email = "stefan.verhoeven@gmail.com" }
-]
+authors = [{ name = "Stefan Verhoeven", email = "stefan.verhoeven@gmail.com" }]
 requires-python = ">=3.13"
-dependencies = [
-    "rocrate==0.15.0",
-]
+dependencies = ["rocrate==0.15.0"]
 dynamic = ["version"]
 classifiers = [
   "Development Status :: 4 - Beta",
@@ -26,9 +22,7 @@ classifiers = [
 "Documentation" = "https://rocrate-action-recorder.readthedocs.io/"
 
 [project.optional-dependencies]
-click = [
-  "click>=8.1.0",
-]
+click = ["click>=8.1.0"]
 cyclopts = ["cyclopts>=4.10.1"]
 
 [build-system]
@@ -39,43 +33,34 @@ build-backend = "hatchling.build"
 path = "src/rocrate_action_recorder/__about__.py"
 
 [dependency-groups]
-dev = [
-  {include-group = "typecheck"},
-  {include-group = "test"}
-]
-typecheck = [
-    "pyright>=1.1.410",
-]
+dev = [{ include-group = "typecheck" }, { include-group = "test" }]
+typecheck = ["pyright>=1.1.411"]
 test = [
-    "click>=8.1.0",
-    "pytest>=9.0.2",
-    "pytest-asyncio>=0.21.0",
-    "pytest-cov>=7.0.0",
-    "roc-validator>=0.10.0",
-    "cyclopts>=4.16.1",
-    "pydantic>=2.0.0",
-    "attrs>=24.0.0",
+  "click>=8.1.0",
+  "pytest>=9.0.2",
+  "pytest-asyncio>=0.21.0",
+  "pytest-cov>=7.0.0",
+  "roc-validator>=0.10.0",
+  "cyclopts>=4.16.1",
+  "pydantic>=2.0.0",
+  "attrs>=24.0.0",
 ]
 docs = [
-    "sphinx>=9.1.0",
-    "myst_parser>=0.13",
-    "sphinx-autoapi",
-    "sphinx_copybutton",
-    "sphinx_autodoc_typehints",
-    "furo>=2023.08.17",
+  "sphinx>=9.1.0",
+  "myst_parser>=0.13",
+  "sphinx-autoapi",
+  "sphinx_copybutton",
+  "sphinx_autodoc_typehints",
+  "furo>=2023.08.17",
 ]
 
 [tool.pytest]
 minversion = "9.0"
 strict = true
 addopts = ["--doctest-modules", "--import-mode=importlib"]
-filterwarnings = [
-  "error",
-]
+filterwarnings = ["error"]
 log_level = "INFO"
-testpaths = [
-  "tests", "src",
-]
+testpaths = ["tests", "src"]
 
 [tool.coverage]
 run.source = ["src"]
@@ -85,6 +70,8 @@ run.branch = true
 include = ['src']
 pythonVersion = "3.14"
 pythonPlatform = "Linux"
+venvPPath = "."
+venv = ".venv"
 
 [tool.ruff]
 line-length = 120
@@ -96,11 +83,5 @@ convention = "google"
 known-first-party = ["rocrate_action_recorder"]
 
 [tool.ruff.lint]
-select = [
-    "E",
-    "F",
-    "I",
-]
-ignore = [
-    "E501"
-]
+select = ["E", "F", "I"]
+ignore = ["E501"]

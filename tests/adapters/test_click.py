@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import cast
 
 import click
 import pytest
@@ -304,6 +305,8 @@ class Test_collect_record_info_from_click:
 
         with cli.make_context("git", args) as parent_ctx:
             subcommand_name, subcommand, remaining_args = cli.resolve_command(parent_ctx, args)
+            if subcommand is None:
+                raise ValueError(f"Subcommand '{subcommand_name}' not found")
             with subcommand.make_context(
                 subcommand_name,
                 remaining_args,
@@ -358,12 +361,16 @@ class Test_collect_record_info_from_click:
 
         with cli.make_context("git", args) as root_ctx:
             remote_name, remote_cmd, remaining_args = cli.resolve_command(root_ctx, args)
+            if remote_cmd is None:
+                raise ValueError(f"Subcommand '{remote_name}' not found")
             with remote_cmd.make_context(
                 remote_name,
                 remaining_args,
                 parent=root_ctx,
             ) as remote_ctx:
-                add_name, add_cmd, add_args = remote_cmd.resolve_command(remote_ctx, remaining_args)
+                add_name, add_cmd, add_args = cast(click.Group, remote_cmd).resolve_command(remote_ctx, remaining_args)
+                if add_cmd is None:
+                    raise ValueError(f"Subcommand '{add_name}' not found")
                 with add_cmd.make_context(
                     add_name,
                     add_args,
@@ -413,6 +420,8 @@ class Test_collect_record_info_from_click:
         args = ["--no-pager", "status"]
         with cli.make_context("git", args) as parent_ctx:
             subcommand_name, subcommand, remaining_args = cli.resolve_command(parent_ctx, args)
+            if subcommand is None:
+                raise ValueError(f"Subcommand '{subcommand_name}' not found")
             with subcommand.make_context(
                 subcommand_name,
                 remaining_args,

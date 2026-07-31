@@ -21,6 +21,7 @@ from pydantic import BaseModel
 from rocrate.rocrate import BASENAME, ROCrate
 
 from rocrate_action_recorder.adapters.cyclopts import (
+    CRATE_DIR,
     INPUT_DIR,
     INPUT_DIRS,
     INPUT_FILE,
@@ -1783,3 +1784,211 @@ class Test_value2paths:
         paths = value2paths((path, 42))
 
         assert paths == [path]
+
+
+class TestCrateDir:
+    def app_with_crate_dir(self) -> App:
+        app = App(result_action="return_value", version="1.0.0")
+
+        @app.default
+        def main(
+            session_dir: Annotated[Path, CRATE_DIR],
+            /,
+        ):
+            session_dir.mkdir(parents=True, exist_ok=True)
+            print(f"Session directory: {session_dir}")
+
+        return app
+
+    def test_crate_dir_marker(self, tmp_path: Path):
+        app = self.app_with_crate_dir()
+        session_dir = tmp_path / "mysession"
+        tokens = [str(session_dir)]
+
+        with record_cyclopts(app, tokens=tokens):
+            app(tokens=tokens)
+
+        assert_crate(
+            session_dir,
+            action_id=f"main {session_dir}",
+            input_ids=set(),
+            output_ids=set(),
+            instrument_id="main@1.0.0",
+        )
+
+    def test_crate_dir_marker_overrides_record_argument(self, tmp_path: Path):
+        app = self.app_with_crate_dir()
+        session_dir = tmp_path / "annotated-session"
+        explicit_crate_dir = tmp_path / "explicit-crate"
+        tokens = [str(session_dir)]
+
+        with record_cyclopts(app, tokens=tokens, crate_dir=explicit_crate_dir):
+            app(tokens=tokens)
+
+        assert_crate(
+            session_dir,
+            action_id=f"main {session_dir}",
+            input_ids=set(),
+            output_ids=set(),
+            instrument_id="main@1.0.0",
+        )
+        assert_no_crate(explicit_crate_dir)
+
+    def app_with_named_crate_dir(self) -> App:
+        app = App(result_action="return_value", version="1.0.0")
+
+        @app.default
+        def main(
+            *,
+            session_dir: Annotated[Path, CRATE_DIR] = Path("default_session"),
+        ):
+            session_dir.mkdir(parents=True, exist_ok=True)
+            print(f"Session directory: {session_dir}")
+
+        return app
+
+    def test_named_crate_dir_given(self, tmp_path: Path):
+        app = self.app_with_named_crate_dir()
+        session_dir = tmp_path / "mysession"
+        tokens = ["--session-dir", str(session_dir)]
+
+        with record_cyclopts(app, tokens=tokens):
+            app(tokens=tokens)
+
+        assert_crate(
+            session_dir,
+            action_id=f"main --session-dir {session_dir}",
+            input_ids=set(),
+            output_ids=set(),
+            instrument_id="main@1.0.0",
+        )
+
+    def test_named_crate_dir_not_given(self, working_tmp_path: Path):
+        """When optional named CRATE_DIR arg is not provided, crate goes to the default path."""
+        app = self.app_with_named_crate_dir()
+        default_dir = working_tmp_path / "default_session"
+        default_dir.mkdir()
+        tokens = ""
+
+        with record_cyclopts(app, tokens=tokens):
+            app(tokens=tokens)
+
+        assert_crate(default_dir, action_id="main")
+
+    def test_named_crate_dir_not_given_with_fallback(self, working_tmp_path: Path):
+        """When named CRATE_DIR arg has a default, the marker default takes precedence over crate_dir parameter."""
+        app = self.app_with_named_crate_dir()
+        default_dir = working_tmp_path / "default_session"
+        default_dir.mkdir()
+        other_dir = working_tmp_path / "other"
+        other_dir.mkdir()
+        tokens = ""
+
+        with record_cyclopts(app, tokens=tokens, crate_dir=other_dir):
+            app(tokens=tokens)
+
+        assert_crate(default_dir, action_id="main")
+        assert_no_crate(other_dir)
+
+    def app_with_optional_crate_dir(self) -> App:
+        app = App(result_action="return_value", version="1.0.0")
+
+        @app.default
+        def main(
+            *,
+            session_dir: Annotated[Path, CRATE_DIR] | None = None,
+        ):
+            if session_dir is not None:
+                session_dir.mkdir(parents=True, exist_ok=True)
+            print(f"Session directory: {session_dir}")
+
+        return app
+
+    def test_optional_crate_dir_given(self, tmp_path: Path):
+        app = self.app_with_optional_crate_dir()
+        session_dir = tmp_path / "mysession"
+        tokens = ["--session-dir", str(session_dir)]
+
+        with record_cyclopts(app, tokens=tokens):
+            app(tokens=tokens)
+
+        assert_crate(
+            session_dir,
+            action_id=f"main --session-dir {session_dir}",
+            input_ids=set(),
+            output_ids=set(),
+            instrument_id="main@1.0.0",
+        )
+
+    def test_optional_crate_dir_not_given(self, tmp_path: Path):
+        """When optional CRATE_DIR arg is None (not provided), crate goes to crate_dir parameter or cwd."""
+        app = self.app_with_optional_crate_dir()
+        tokens = ""
+
+        with record_cyclopts(app, tokens=tokens):
+            app(tokens=tokens)
+
+        assert_no_crate(tmp_path)
+
+    def test_optional_crate_dir_not_given_with_fallback(self, working_tmp_path: Path):
+        """When optional CRATE_DIR arg is None and crate_dir parameter is set, use parameter."""
+        app = self.app_with_optional_crate_dir()
+        tokens = ""
+
+        with record_cyclopts(app, tokens=tokens, crate_dir=working_tmp_path):
+            app(tokens=tokens)
+
+        assert_crate(working_tmp_path, action_id="main")
+
+    def app_with_string_crate_dir(self) -> App:
+        app = App(result_action="return_value", version="1.0.0")
+
+        @app.default
+        def main(
+            session_dir: Annotated[str, CRATE_DIR],
+            /,
+        ):
+            print(f"Session directory: {session_dir}")
+
+        return app
+
+    def test_string_crate_dir_marker(self, tmp_path: Path):
+        app = self.app_with_string_crate_dir()
+        session_dir = tmp_path / "string-session"
+        tokens = [str(session_dir)]
+
+        with record_cyclopts(app, tokens=tokens):
+            app(tokens=tokens)
+
+        assert_crate(
+            session_dir,
+            action_id=f"main {session_dir}",
+            input_ids=set(),
+            output_ids=set(),
+            instrument_id="main@1.0.0",
+        )
+
+    def app_with_int_crate_dir(self) -> App:
+        app = App(result_action="return_value", version="1.0.0")
+
+        @app.default
+        def main(
+            session_dir: Annotated[int, CRATE_DIR],
+            /,
+        ):
+            print(f"Session directory: {session_dir}")
+
+        return app
+
+    def test_int_crate_dir_marker_raises_helpful_error(self, working_tmp_path: Path):
+        app = self.app_with_int_crate_dir()
+        tokens = ["42"]
+
+        with pytest.raises(
+            ValueError,
+            match="annotated with CRATE_DIR.*not path-like.*Fix the CLI",
+        ):
+            with record_cyclopts(app, tokens=tokens):
+                app(tokens=tokens)
+
+        assert_no_crate(working_tmp_path)

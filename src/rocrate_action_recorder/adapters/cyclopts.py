@@ -9,7 +9,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, is_dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, LiteralString
+from typing import Annotated, Any, LiteralString, get_args, get_origin
 
 from cyclopts import App
 from cyclopts.argument import ArgumentCollection
@@ -18,6 +18,7 @@ from cyclopts.help.inline_text import InlineText
 
 from rocrate_action_recorder.adapters.shared import (
     IOArgumentNames,
+    try_convert_to_path,
     value2paths,
 )
 from rocrate_action_recorder.core import (
@@ -47,6 +48,8 @@ OUTPUT_DIRS: LiteralString = "OUTPUT_DIRS"
 """Marker for Annotated argument that represent multiple output directories."""
 RECORD_TRIGGER: LiteralString = "RECORD_TRIGGER"
 """Marker for Annotated boolean argument that trigger recording."""
+CRATE_DIR: LiteralString = "CRATE_DIR"
+"""Marker for Annotated Path argument that specifies the RO-Crate directory."""
 
 _MARKER_TO_CATEGORY: dict[str, str] = {
     INPUT_FILE: "input_files",
@@ -58,6 +61,33 @@ _MARKER_TO_CATEGORY: dict[str, str] = {
     OUTPUT_DIR: "output_dirs",
     OUTPUT_DIRS: "output_dirs",
 }
+
+
+def _annotation_markers(annotation: Any, extra_metadata: Iterable[Any] = ()) -> list[Any]:
+    """Collect Annotated-style metadata from an annotation tree.
+
+    This unwraps nested ``Annotated`` values that may be wrapped inside
+    ``Optional``/union annotations.
+    """
+    markers = list(extra_metadata)
+    origin = get_origin(annotation)
+
+    if origin is Annotated:
+        annotated_args = get_args(annotation)
+        if annotated_args:
+            base_annotation, *metadata = annotated_args
+            markers.extend(metadata)
+            return _annotation_markers(base_annotation, markers)
+
+    if origin is not None:
+        for arg in get_args(annotation):
+            markers.extend(_annotation_markers(arg))
+        return markers
+
+    if hasattr(annotation, "__metadata__"):
+        markers.extend(annotation.__metadata__)
+
+    return markers
 
 
 def _collect_subcommands(app: App, parent_name: str, seen: set[str] | None = None) -> dict[str, Program]:
@@ -299,6 +329,34 @@ def _lookup_nested_field(value: Any, field_path: str) -> Any | None:
     return current_value
 
 
+def _resolve_crate_dir_value(value: Any, field_name: str) -> Path | None:
+    """Resolve a CRATE_DIR-marked value to a concrete path.
+
+    Args:
+        value: Parsed argument value.
+        field_name: Argument name used for developer-facing errors.
+
+    Returns:
+        A resolved crate directory path, or None when the value is intentionally unset.
+
+    Raises:
+        ValueError: If the CRATE_DIR marker is applied to a non-path-like value.
+    """
+    if value is None:
+        return None
+
+    path = try_convert_to_path(value)
+    if path is not None:
+        return path
+
+    value_type = type(value).__name__
+    raise ValueError(
+        f"Argument '{field_name}' is annotated with CRATE_DIR but resolved to {value_type}, which is not path-like. "
+        "CRATE_DIR must annotate a pathlib.Path, str, os.PathLike, or equivalent path-convertible value. "
+        f"Fix the CLI by changing '{field_name}' to a path-like type."
+    )
+
+
 def _resolve_io_argument_paths(
     names: list[str],
     name_info: dict[str, tuple[str, str]],
@@ -385,8 +443,8 @@ def _extract_markers_from_pydantic_fields(model_cls: Any, prefix: str = "") -> l
         ann = field_info.annotation
         metadata = getattr(field_info, "metadata", ())
 
-        for meta in metadata:
-            if meta in _MARKER_TO_CATEGORY or meta == RECORD_TRIGGER:
+        for meta in _annotation_markers(ann, metadata):
+            if meta in _MARKER_TO_CATEGORY or meta in (RECORD_TRIGGER, CRATE_DIR):
                 markers.append((field_path, meta))
 
         # Recursively check nested Pydantic models
@@ -415,9 +473,9 @@ def _extract_markers_from_attrs_fields(attrs_cls: Any, prefix: str = "") -> list
         field_name = attr.name
         field_path = f"{prefix}.{field_name}" if prefix else field_name
         ann = attr.type
-        if ann and hasattr(ann, "__metadata__"):
-            for meta in ann.__metadata__:
-                if meta in _MARKER_TO_CATEGORY or meta == RECORD_TRIGGER:
+        if ann:
+            for meta in _annotation_markers(ann):
+                if meta in _MARKER_TO_CATEGORY or meta in (RECORD_TRIGGER, CRATE_DIR):
                     markers.append((field_path, meta))
 
         # Recursively check nested attrs classes
@@ -451,47 +509,54 @@ def _collect_ios_from_argument_collection(
     collection: ArgumentCollection,
     ios: IOArgumentNames,
     record_trigger_name: str | None,
-) -> str | None:
+    crate_dir_name: str | None,
+) -> tuple[str | None, str | None]:
     """Collect IO markers and record trigger from an argument collection.
 
     Args:
         collection: Argument collection to inspect.
         ios: IO marker accumulator.
         record_trigger_name: Current record trigger name, if any.
+        crate_dir_name: Current crate dir argument name, if any.
 
     Returns:
-        Updated record trigger name.
+        Updated record trigger name and crate dir argument name.
     """
     for arg in collection:
         name = arg.name.lstrip("-")
         ann = arg.field_info.annotation
-        if not hasattr(ann, "__metadata__"):
+        markers = _annotation_markers(ann)
+        if not markers:
             continue
-        for meta in ann.__metadata__:
+        for meta in markers:
             if meta in _MARKER_TO_CATEGORY:
                 getattr(ios, _MARKER_TO_CATEGORY[meta]).append(name)
             elif meta == RECORD_TRIGGER and record_trigger_name is None:
                 record_trigger_name = name
+            elif meta == CRATE_DIR and crate_dir_name is None:
+                crate_dir_name = arg.field_info.names[0]
 
-    return record_trigger_name
+    return record_trigger_name, crate_dir_name
 
 
 def _collect_ios_from_bound_value(
     value: Any,
     ios: IOArgumentNames,
     record_trigger_name: str | None,
+    crate_dir_name: str | None,
     prefix: str = "",
-) -> str | None:
+) -> tuple[str | None, str | None]:
     """Collect IO markers and record trigger from a bound argument value.
 
     Args:
         value: Bound argument value to inspect.
         ios: IO marker accumulator.
         record_trigger_name: Current record trigger name, if any.
+        crate_dir_name: Current crate dir argument name, if any.
         prefix: Optional field prefix for nested models.
 
     Returns:
-        Updated record trigger name.
+        Updated record trigger name and crate dir argument name.
     """
     if _is_pydantic_model(value):
         model_cls = type(value)
@@ -501,6 +566,8 @@ def _collect_ios_from_bound_value(
                 getattr(ios, _MARKER_TO_CATEGORY[meta]).append(field_path)
             elif meta == RECORD_TRIGGER and record_trigger_name is None:
                 record_trigger_name = field_path
+            elif meta == CRATE_DIR and crate_dir_name is None:
+                crate_dir_name = field_path
 
     if _is_attrs_instance(value):
         attrs_cls = type(value)
@@ -510,33 +577,38 @@ def _collect_ios_from_bound_value(
                 getattr(ios, _MARKER_TO_CATEGORY[meta]).append(field_path)
             elif meta == RECORD_TRIGGER and record_trigger_name is None:
                 record_trigger_name = field_path
+            elif meta == CRATE_DIR and crate_dir_name is None:
+                crate_dir_name = field_path
 
-    return record_trigger_name
+    return record_trigger_name, crate_dir_name
 
 
 def _collect_ios_from_bound_arguments(
     bound_args: inspect.BoundArguments,
     ios: IOArgumentNames,
     record_trigger_name: str | None,
-) -> str | None:
+    crate_dir_name: str | None,
+) -> tuple[str | None, str | None]:
     """Collect IO markers and record trigger from parsed bound arguments.
 
     Args:
         bound_args: Parsed Cyclopts bound arguments.
         ios: IO marker accumulator.
         record_trigger_name: Current record trigger name, if any.
+        crate_dir_name: Current crate dir argument name, if any.
 
     Returns:
-        Updated record trigger name.
+        Updated record trigger name and crate dir argument name.
     """
     for arg_value in bound_args.arguments.values():
-        record_trigger_name = _collect_ios_from_bound_value(
+        record_trigger_name, crate_dir_name = _collect_ios_from_bound_value(
             arg_value,
             ios,
             record_trigger_name,
+            crate_dir_name,
         )
 
-    return record_trigger_name
+    return record_trigger_name, crate_dir_name
 
 
 def _detect_ios_and_trigger(
@@ -544,7 +616,7 @@ def _detect_ios_and_trigger(
     command: Any | None = None,
     meta_argument_collection: ArgumentCollection | None = None,
     bound_args: inspect.BoundArguments | None = None,
-) -> tuple[IOArgumentNames, str | None]:
+) -> tuple[IOArgumentNames, str | None, str | None]:
     """Auto-detect input/output arguments and optional record trigger from Annotated metadata.
 
     Args:
@@ -553,22 +625,25 @@ def _detect_ios_and_trigger(
         meta_argument_collection: Optional meta app argument collection to check for triggers.
 
     Returns:
-        A tuple of (IOArgumentNames, trigger_arg_name_or_None).
+        A tuple of (IOArgumentNames, trigger_arg_name_or_None, crate_dir_arg_name_or_None).
     """
     ios = IOArgumentNames()
     record_trigger_name: str | None = None
+    crate_dir_name: str | None = None
 
-    record_trigger_name = _collect_ios_from_argument_collection(
+    record_trigger_name, crate_dir_name = _collect_ios_from_argument_collection(
         argument_collection,
         ios,
         record_trigger_name,
+        crate_dir_name,
     )
 
     if meta_argument_collection is not None:
-        record_trigger_name = _collect_ios_from_argument_collection(
+        record_trigger_name, crate_dir_name = _collect_ios_from_argument_collection(
             meta_argument_collection,
             ios,
             record_trigger_name,
+            crate_dir_name,
         )
 
     if command is not None and inspect.isfunction(command):
@@ -583,15 +658,19 @@ def _detect_ios_and_trigger(
                         elif meta == RECORD_TRIGGER:
                             if record_trigger_name is None:
                                 record_trigger_name = param_name
+                        elif meta == CRATE_DIR:
+                            if crate_dir_name is None:
+                                crate_dir_name = param_name
 
     if bound_args is not None:
-        record_trigger_name = _collect_ios_from_bound_arguments(
+        record_trigger_name, crate_dir_name = _collect_ios_from_bound_arguments(
             bound_args,
             ios,
             record_trigger_name,
+            crate_dir_name,
         )
 
-    return ios, record_trigger_name
+    return ios, record_trigger_name, crate_dir_name
 
 
 def _should_record(
@@ -661,6 +740,7 @@ class Info:
     program: Program
     ioargs: IOArgumentPaths
     should_record: bool
+    crate_dir: Path | None = None
     argv: list[str] | None = None
 
 
@@ -675,6 +755,7 @@ def collect_info(
 
     argv = _parse_tokens(tokens)
     command, bound_args, _ = app.parse_args(argv)
+    bound_args.apply_defaults()
     executed_app = _resolve_executed_subapp(app, command) or app
     if executed_app.default_command is None:
         return Info(program=program, ioargs=IOArgumentPaths(), should_record=False, argv=argv)
@@ -683,7 +764,7 @@ def collect_info(
     if hasattr(app.meta, "default_command") and app.meta.default_command:
         meta_argument_collection = app.meta.assemble_argument_collection()
 
-    ios, record_trigger_name = _detect_ios_and_trigger(
+    ios, record_trigger_name, crate_dir_name = _detect_ios_and_trigger(
         argument_collection,
         command=command,
         meta_argument_collection=meta_argument_collection,
@@ -704,8 +785,18 @@ def collect_info(
         ios,
         argument_collection,
     )
+    crate_dir = None
+    if crate_dir_name is not None:
+        crate_dir_value = _lookup_argument_value(bound_args.arguments, crate_dir_name)
+        crate_dir = _resolve_crate_dir_value(crate_dir_value, crate_dir_name)
 
-    return Info(program=program, ioargs=ioargs, should_record=should_record, argv=argv)
+    return Info(
+        program=program,
+        ioargs=ioargs,
+        should_record=should_record,
+        crate_dir=crate_dir,
+        argv=argv,
+    )
 
 
 @contextmanager
@@ -720,16 +811,149 @@ def record_cyclopts(
     """Context manager to record a Cyclopts CLI invocation in an RO-Crate.
 
     Hint:
-        The argument names passed in :class:`IOArgumentNames` should match keys in
-        the bound arguments (typically from `app.parse_args()` or the decorated function
-        arguments). For example `def myfunc(input: Path, output: Path)` would correspond
-        to parameter names `input` and `output`.
+        Marker metadata (for example :data:`INPUT_FILE` and :data:`OUTPUT_FILE`)
+        is auto-detected from ``typing.Annotated`` parameters and nested models.
+        Recording writes ``ro-crate-metadata.json`` only when execution finishes
+        successfully and recording is enabled.
+
+    Examples:
+        Full runnable example:
+        https://github.com/i-VRESSE/rocrate-action-recorder/tree/main/example/cyclopts
+
+        Basic positional input/output tracking::
+
+            from pathlib import Path
+            from typing import Annotated
+
+            from cyclopts import App
+            from rocrate_action_recorder.adapters.cyclopts import (
+                INPUT_FILE,
+                OUTPUT_FILE,
+                record_cyclopts,
+            )
+
+            app = App(version="1.2.3")
+
+            @app.default
+            def main(
+                input: Annotated[Path, INPUT_FILE],
+                output: Annotated[Path, OUTPUT_FILE],
+                /,
+            ):
+                output.write_text(input.read_text().upper())
+
+            # Call as: myscript.py input.txt output.txt
+            with record_cyclopts(app, dataset_license="CC-BY-4.0"):
+                app()
+
+        Toggle recording with a boolean trigger flag::
+
+            from typing import Annotated
+
+            from cyclopts import App, Parameter
+            from rocrate_action_recorder.adapters.cyclopts import RECORD_TRIGGER, record_cyclopts
+
+            app = App()
+
+            @app.default
+            def main(*, prov: Annotated[bool, Parameter(negative=""), RECORD_TRIGGER] = False):
+                pass
+
+            # Records only when --prov is passed.
+            # Call as: myscript.py --prov
+            with record_cyclopts(app):
+                app()
+
+        Track nested configuration fields (for example dataclass or Pydantic models)::
+
+            from dataclasses import dataclass
+            from pathlib import Path
+            from typing import Annotated
+
+            from cyclopts import App
+            from rocrate_action_recorder.adapters.cyclopts import INPUT_FILE, OUTPUT_FILE, record_cyclopts
+
+            @dataclass
+            class IO:
+                input: Annotated[Path, INPUT_FILE]
+                output: Annotated[Path, OUTPUT_FILE]
+
+            app = App()
+
+            @app.default
+            def main(io: IO):
+                io.output.write_text(io.input.read_text().upper())
+
+            # Call as: myscript.py input.txt output.txt
+            with record_cyclopts(app):
+                app()
+
+        Record multiple inputs/outputs from list markers::
+
+            from pathlib import Path
+            from typing import Annotated
+
+            from cyclopts import App
+            from rocrate_action_recorder.adapters.cyclopts import (
+                INPUT_FILES,
+                OUTPUT_FILES,
+                record_cyclopts,
+            )
+
+            app = App()
+
+            @app.default
+            def main(
+                *,
+                inputs: Annotated[list[Path], INPUT_FILES],
+                outputs: Annotated[list[Path], OUTPUT_FILES],
+            ):
+                for src, dst in zip(inputs, outputs, strict=True):
+                    dst.write_text(src.read_text().upper())
+
+            # Call as: myscript.py --inputs in1.txt --inputs in2.txt --outputs out1.txt --outputs out2.txt
+            with record_cyclopts(app):
+                app()
+
+        Let CLI arguments choose the crate destination using :data:`CRATE_DIR`::
+
+            from pathlib import Path
+            from typing import Annotated
+
+            from cyclopts import App
+            from rocrate_action_recorder.adapters.cyclopts import CRATE_DIR, record_cyclopts
+
+            app = App()
+
+            @app.default
+            def main(*, session_dir: Annotated[Path, CRATE_DIR]):
+                pass
+
+            # The CRATE_DIR-marked value overrides record_cyclopts(crate_dir=...).
+            # Call as: myscript.py --session-dir ./runs/session-001
+            with record_cyclopts(app, crate_dir=Path("fallback-crate")):
+                app()
+
+        Subcommands are supported; wrap the root app once and invoke normally::
+
+            app = App(name="tool")
+            process = App(name="process")
+
+            @process.default
+            def run(...):
+                ...
+
+            app.command(process)
+            # Call as: tool process
+            with record_cyclopts(app):
+                app()
 
     Args:
         app: Root Cyclopts App instance.
-        tokens: Optional command arguments to use in action id.
+        tokens: Optional command arguments used for parsing and action id generation.
         dataset_license: Optional dataset license string. If absent ro-crate will be invalid.
         crate_dir: Optional path to RO-Crate directory.
+            If a parsed argument is annotated with :data:`CRATE_DIR`, that value takes precedence.
         software_version: Optional software version override. Otherwise extracted from App instance.
         current_user: Optional user override. Uses current system user if None.
     """
@@ -752,7 +976,7 @@ def record_cyclopts(
                 program=info.program,
                 ioargs=info.ioargs,
                 start_time=start_time,
-                crate_dir=crate_dir,
+                crate_dir=info.crate_dir or crate_dir,
                 argv=[info.program.name] + (info.argv or []),
                 end_time=end_time,
                 current_user=current_user,
