@@ -70,7 +70,7 @@ run.branch = true
 include = ['src']
 pythonVersion = "3.14"
 pythonPlatform = "Linux"
-venvPPath = "."
+venvPath = "."
 venv = ".venv"
 
 [tool.ruff]
