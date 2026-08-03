@@ -7,6 +7,7 @@ from pathlib import Path
 from textwrap import dedent
 from types import ModuleType
 from typing import Annotated
+from unittest.mock import Mock
 
 import cyclopts
 import pytest
@@ -157,7 +158,7 @@ class TestMarkerless:
         with record_cyclopts(app, tokens=tokens):
             app(tokens=tokens)
 
-        _, action = assert_crate(
+        assert_crate(
             working_tmp_path,
             action_id="main",
             input_ids=set(),
@@ -582,6 +583,22 @@ class TestTrigger:
         tokens = "foo 3"
 
         with record_cyclopts(app.meta, tokens=tokens):
+            app.meta(tokens=tokens)
+
+        assert_no_crate(working_tmp_path)
+        captured = capsys.readouterr()
+        assert "Provenance recording is disabled." in captured.out
+
+    def test_trigger_off_in_meta_when_wrapping_root_app(
+        self,
+        working_tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ):
+        """Meta RECORD_TRIGGER must disable recording even when record_cyclopts wraps root app."""
+        app = self.app_with_trigger_in_meta()
+        tokens = "foo 3"
+
+        with record_cyclopts(app, tokens=tokens):
             app.meta(tokens=tokens)
 
         assert_no_crate(working_tmp_path)
@@ -1994,25 +2011,131 @@ class TestCrateDir:
 
         assert_no_crate(working_tmp_path)
 
-class TestConfig():
-    def test_dict(self, tmp_path: Path):
+
+class TestConfig:
+    """Uses cyclopts.config.Dict to provide config values to the app.
+
+    See https://cyclopts.readthedocs.io/en/stable/config_file.html
+    """
+
+    def test_empty_config(self, working_tmp_path: Path):
         data = {}
         config = cyclopts.config.Dict(data)
-        app = App(result_action="return_value", version="1.0.0", 
-                  config=config
-                  )
-        recorded_something = None
+        app = App(result_action="return_value", version="1.0.0", config=config)
+        called = Mock()
 
         @app.default
-        def main(*, something: str = 'defaultvalue'):
-            nonlocal recorded_something
-            recorded_something = something
+        def main(*, something: str = "defaultvalue"):
+            called(something)
 
         tokens = ""
-
-        # app(tokens=tokens)
 
         with record_cyclopts(app, tokens=tokens):
             app(tokens=tokens)
 
-        assert recorded_something == 'defaultvalue'
+        called.assert_called_once_with("defaultvalue")
+        assert_crate(
+            working_tmp_path,
+            action_id="main",
+        )
+
+    def test_action_called_with_config_value(self, working_tmp_path: Path):
+        data = {"something": "valuefromconfig"}
+        config = cyclopts.config.Dict(data)
+        app = App(result_action="return_value", version="1.0.0", config=config)
+        called = Mock()
+
+        @app.default
+        def main(*, something: str = "defaultvalue"):
+            called(something)
+
+        tokens = ""
+
+        with record_cyclopts(app, tokens=tokens):
+            app(tokens=tokens)
+
+        called.assert_called_once_with("valuefromconfig")
+        assert_crate(
+            working_tmp_path,
+            action_id="main",
+        )
+
+    def test_trigger_off_in_config(self, working_tmp_path: Path):
+        data = {"prov": False}
+        config = cyclopts.config.Dict(data)
+        app = App(result_action="return_value", version="1.0.0", config=config)
+        called = Mock()
+
+        @app.default
+        def main(*, prov: Annotated[bool, RECORD_TRIGGER] = True):
+            called(prov)
+
+        tokens = ""
+
+        with record_cyclopts(app, tokens=tokens):
+            app(tokens=tokens)
+
+        called.assert_called_once_with(False)
+        assert_no_crate(working_tmp_path)
+
+    def test_subcommand(self, working_tmp_path: Path):
+        data = {"mysub": {"something": "valuefromconfig"}}
+        config = cyclopts.config.Dict(data)
+        app = App(name="myapp", result_action="return_value", version="1.0.0", config=config)
+        called = Mock()
+
+        @app.command
+        def mysub(*, something: str = "default"):
+            called(something)
+
+        tokens = "mysub"
+
+        with record_cyclopts(app, tokens=tokens):
+            app(tokens=tokens)
+
+        called.assert_called_once_with("valuefromconfig")
+        assert_crate(
+            working_tmp_path,
+            action_id="myapp mysub",
+        )
+
+    def test_do_not_use_subcommands_as_keys_and_allow_unknown(self, working_tmp_path: Path):
+        data = {"something": "valuefromconfig"}
+        config = cyclopts.config.Dict(data, use_commands_as_keys=False, allow_unknown=True)
+        app = App(name="myapp", result_action="return_value", version="1.0.0", config=config)
+        called = Mock()
+
+        @app.command
+        def mysub(*, something: str = "default"):
+            called(something)
+
+        tokens = "mysub"
+
+        with record_cyclopts(app, tokens=tokens):
+            app(tokens=tokens)
+
+        called.assert_called_once_with("valuefromconfig")
+        assert_crate(
+            working_tmp_path,
+            action_id="myapp mysub",
+        )
+
+    def test_trigger_global(self, working_tmp_path: Path):
+        data = {"prov": False}
+        # This could be used to configure prov trigger for all subcommands
+        # in a global way
+        config = cyclopts.config.Dict(data, use_commands_as_keys=False, allow_unknown=True)
+        app = App(result_action="return_value", version="1.0.0", config=config)
+        called = Mock()
+
+        @app.command
+        def mysub(*, prov: Annotated[bool, RECORD_TRIGGER] = True):
+            called(prov)
+
+        tokens = "mysub"
+
+        with record_cyclopts(app, tokens=tokens):
+            app(tokens=tokens)
+
+        called.assert_called_once_with(False)
+        assert_no_crate(working_tmp_path)

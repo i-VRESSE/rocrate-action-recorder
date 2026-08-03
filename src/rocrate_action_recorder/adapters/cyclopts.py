@@ -761,8 +761,13 @@ def collect_info(
         return Info(program=program, ioargs=IOArgumentPaths(), should_record=False, argv=argv)
     argument_collection = executed_app.assemble_argument_collection(parse_docstring=True)
     meta_argument_collection = None
+    # when App.config is not None and
+    # checking app.meta.default_command causes changes to meta that makes second call to app fail
+    # with `ValueError: Cannot assemble argument collection: no default command is registered.`.
+    original_meta = app._meta
     if hasattr(app.meta, "default_command") and app.meta.default_command:
         meta_argument_collection = app.meta.assemble_argument_collection()
+    app._meta = original_meta
 
     ios, record_trigger_name, crate_dir_name = _detect_ios_and_trigger(
         argument_collection,
@@ -947,6 +952,33 @@ def record_cyclopts(
             # Call as: tool process
             with record_cyclopts(app):
                 app()
+
+        Use config file to override default prov trigger value:
+
+        .. code-block:: python
+
+            from typing import Annotated
+
+            from cyclopts import App, Parameter
+            from cyclopts.config import Toml
+            from rocrate_action_recorder.adapters.cyclopts import RECORD_TRIGGER, record_cyclopts
+
+            app = App(config=Toml("myconfig.toml"))
+
+            @app.default
+            def main(*, prov: Annotated[bool, Parameter(negative=""), RECORD_TRIGGER] = False):
+                pass
+
+            with record_cyclopts(app):
+                app()
+
+        Create a `myconfig.toml` file containing:
+
+        .. code-block:: toml
+
+            prov = true
+
+        When script is called then provenance is always recorded.
 
     Args:
         app: Root Cyclopts App instance.
