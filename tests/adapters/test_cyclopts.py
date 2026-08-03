@@ -8,6 +8,7 @@ from textwrap import dedent
 from types import ModuleType
 from typing import Annotated
 
+import cyclopts
 import pytest
 from attrs import define
 from cyclopts import App, Group, MissingArgumentError, Parameter, ResultAction
@@ -1992,3 +1993,26 @@ class TestCrateDir:
                 app(tokens=tokens)
 
         assert_no_crate(working_tmp_path)
+
+class TestConfig():
+    def test_dict(self, tmp_path: Path):
+        data = {}
+        config = cyclopts.config.Dict(data)
+        app = App(result_action="return_value", version="1.0.0", 
+                  config=config
+                  )
+        recorded_something = None
+
+        @app.default
+        def main(*, something: str = 'defaultvalue'):
+            nonlocal recorded_something
+            recorded_something = something
+
+        tokens = ""
+
+        # app(tokens=tokens)
+
+        with record_cyclopts(app, tokens=tokens):
+            app(tokens=tokens)
+
+        assert recorded_something == 'defaultvalue'
