@@ -2053,10 +2053,7 @@ class TestCrateDir:
 
 
 class TestConfig:
-    """Uses cyclopts.config.Dict to provide config values to the app.
-
-    See https://cyclopts.readthedocs.io/en/stable/config_file.html
-    """
+    """See https://cyclopts.readthedocs.io/en/stable/config_file.html"""
 
     def test_empty_config(self, working_tmp_path: Path):
         data = {}
@@ -2079,7 +2076,7 @@ class TestConfig:
             action_id="main",
         )
 
-    def test_action_called_with_config_value(self, working_tmp_path: Path):
+    def test_action_called_with_config_value(self, working_tmp_path: Path, caplog: pytest.LogCaptureFixture):
         data = {"something": "valuefromconfig"}
         config = cyclopts.config.Dict(data)
         app = App(result_action="return_value", version="1.0.0", config=config)
@@ -2098,6 +2095,10 @@ class TestConfig:
         assert_crate(
             working_tmp_path,
             action_id="main",
+            input_ids={"valuefromconfig"},
+        )
+        assert (
+            "Argument values 'something' from dict do not get recorded in 'ro-crate-metadata.json' file" in caplog.text
         )
 
     def test_trigger_off_in_config(self, working_tmp_path: Path):
@@ -2118,7 +2119,7 @@ class TestConfig:
         called.assert_called_once_with(False)
         assert_no_crate(working_tmp_path)
 
-    def test_subcommand(self, working_tmp_path: Path):
+    def test_subcommand(self, working_tmp_path: Path, caplog: pytest.LogCaptureFixture):
         data = {"mysub": {"something": "valuefromconfig"}}
         config = cyclopts.config.Dict(data)
         app = App(name="myapp", result_action="return_value", version="1.0.0", config=config)
@@ -2137,6 +2138,10 @@ class TestConfig:
         assert_crate(
             working_tmp_path,
             action_id="myapp mysub",
+        )
+        assert (
+            "Argument values 'mysub.something' from dict do not get recorded in 'ro-crate-metadata.json' file"
+            in caplog.text
         )
 
     def test_do_not_use_subcommands_as_keys_and_allow_unknown(self, working_tmp_path: Path):
@@ -2179,3 +2184,33 @@ class TestConfig:
 
         called.assert_called_once_with(False)
         assert_no_crate(working_tmp_path)
+
+    def test_file(self, working_tmp_path: Path, caplog: pytest.LogCaptureFixture):
+        config_file = working_tmp_path / "config.toml"
+        config_file.write_text(
+            dedent("""\
+            something = "valuefromconfig"
+            """)
+        )
+        config = cyclopts.config.Toml(config_file)
+        app = App(name="myapp", result_action="return_value", version="1.0.0", config=config)
+        called = Mock()
+
+        @app.default
+        def main(*, something: str = "defaultvalue"):
+            called(something)
+
+        tokens = ""
+
+        with record_cyclopts(app, tokens=tokens):
+            app(tokens=tokens)
+
+        called.assert_called_once_with("valuefromconfig")
+        assert_crate(
+            working_tmp_path,
+            action_id="myapp",
+        )
+        assert (
+            f"Argument values 'something' from {config_file} do not get recorded in 'ro-crate-metadata.json' file"
+            in caplog.text
+        )

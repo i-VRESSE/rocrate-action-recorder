@@ -15,6 +15,7 @@ from cyclopts import App
 from cyclopts.argument import ArgumentCollection
 from cyclopts.help import format_doc
 from cyclopts.help.inline_text import InlineText
+from rocrate.rocrate import BASENAME
 
 from rocrate_action_recorder.adapters.shared import (
     IOArgumentNames,
@@ -746,6 +747,22 @@ class Info:
     argv: list[str] | None = None
 
 
+def _flatten_keys(d: dict, separator=".") -> set[str]:
+    """Takes `{"mysub": {"something": "valuefromconfig"}}` and returns `{"mysub.something"}`."""
+    keys = []
+
+    def _flatten(current, parent_key=""):
+        if isinstance(current, dict):
+            for k, v in current.items():
+                full_key = f"{parent_key}{separator}{k}" if parent_key else k
+                _flatten(v, full_key)
+        else:
+            keys.append(parent_key)
+
+    _flatten(d)
+    return set(keys)
+
+
 def collect_info(
     app: App,
     tokens: str | Iterable[str] | None = None,
@@ -796,6 +813,15 @@ def collect_info(
     if crate_dir_name is not None:
         crate_dir_value = _lookup_argument_value(bound_args.arguments, crate_dir_name)
         crate_dir = _resolve_crate_dir_value(crate_dir_value, crate_dir_name)
+
+    if should_record and app.config:
+        for aconfig in app.config:
+            if aconfig.config:
+                names_from_config = _flatten_keys(aconfig.config)
+                config_keys = ",".join([f"'{k}'" for k in names_from_config])
+                # TODO only log when config name is used in command and is not overwritten as CLI argument
+                msg = f"Argument values {config_keys} from {aconfig.source} do not get recorded in '{BASENAME}' file"
+                logger.warning(msg)
 
     return Info(
         program=program,
