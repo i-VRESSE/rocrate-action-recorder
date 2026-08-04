@@ -1536,6 +1536,12 @@ class TestStdioPath:
             | None = None,
             prov: Annotated[bool, Parameter(negative=""), RECORD_TRIGGER] = False,
         ):
+            """Main command.
+
+            Args:
+                write_stats: The output file path for writing stats.
+                prov: Whether to enable provenance recording.
+            """
             pass
 
         tokens = []
