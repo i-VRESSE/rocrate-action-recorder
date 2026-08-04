@@ -6,13 +6,13 @@ from io import BytesIO, TextIOWrapper
 from pathlib import Path
 from textwrap import dedent
 from types import ModuleType
-from typing import Annotated
+from typing import Annotated, Any
 from unittest.mock import Mock
 
 import cyclopts
 import pytest
 from attrs import define
-from cyclopts import App, Group, MissingArgumentError, Parameter, ResultAction
+from cyclopts import App, Group, MissingArgumentError, Parameter, ResultAction, validators
 from cyclopts.types import (
     ExistingDirectory,
     NonExistentDirectory,
@@ -1509,6 +1509,46 @@ class TestStdioPath:
             output_ids=set(),  # stdout is not recorded as an output file
             instrument_id="main@1.0.0",
         )
+
+    def test_argument_name_does_not_exist(self, working_tmp_path: Path, caplog: pytest.LogCaptureFixture):
+        app = App(result_action="return_value", version="1.0.0")
+
+        class StdioPathValidator(validators.Path):
+            """Custom Path validator that allows "-" for stdin/stdout.
+
+            This validator checks if the path is "-", and if so, it bypasses Path validation.
+
+            If given '-', it also checks if a file named '-' already exists, which would conflict with stdin/stdout usage.
+            """
+
+            def __call__(self, type_: Any, path: Any):
+                if str(path) == "-":
+                    if Path("-").exists():
+                        msg = '"-" is reserved for stdin/stdout but a file named "-" already exists.'
+                        raise ValueError(msg)
+                    return None
+                return super().__call__(type_, path)
+
+        @app.default
+        def main(
+            *,
+            write_stats: Annotated[StdioPath, Parameter(validator=StdioPathValidator(dir_okay=False)), OUTPUT_FILE]
+            | None = None,
+            prov: Annotated[bool, Parameter(negative=""), RECORD_TRIGGER] = False,
+        ):
+            """Main command.
+
+            Args:
+                write_stats: The output file path for writing stats.
+                prov: Whether to enable provenance recording.
+            """
+            pass
+
+        tokens = []
+        with record_cyclopts(app, tokens=tokens):
+            app(tokens=tokens)
+
+        assert "Argument name 'write-stats' does not exist in parsed Cyclopts args." not in caplog.text
 
 
 class TestDataclass:

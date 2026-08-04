@@ -381,7 +381,9 @@ def _resolve_io_argument_paths(
         field_name, help_text = info
         value = _lookup_argument_value(arguments, field_name)
         if value is None:
-            logger.warning(f"Argument name '{name}' does not exist in parsed Cyclopts args.")
+            if field_name not in arguments:
+                # TODO do not warn if field_name has '.' in it and None as value.
+                logger.warning(f"Argument name '{name}' does not exist in parsed Cyclopts args.")
             continue
         paths = value2paths(value)
         if not paths:
