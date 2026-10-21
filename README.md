@@ -81,6 +81,13 @@ handler(args)
 
 After execution, a `ro-crate-metadata.json` file (like [this one](https://github.com/i-VRESSE/rocrate-action-recorder/blob/main/example/argparse/ro-crate-metadata.json)) will be generated in the current working directory, describing the execution of the CLI command.
 
+To store the current working directory with the action, pass `record_cwd=True` to
+`recorded_argparse`, `recorded_click`, `record_cyclopts`, or the low-level `record`
+function. This adds a `PropertyValue` named `PWD` to the action's `environment`,
+with the absolute working directory at recording time as its value. The working
+directory can differ from the directory where the crate is stored. Recording the
+working directory is disabled by default.
+
 <!-- SPHINX-END -->
 
 You can also call the low-level [record](https://rocrate-action-recorder.readthedocs.io/en/latest/autoapi/rocrate_action_recorder/core/index.html#rocrate_action_recorder.core.record) function directly. 

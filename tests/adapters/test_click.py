@@ -4,7 +4,7 @@ from typing import cast
 import click
 import pytest
 from click.testing import CliRunner
-from rocrate.rocrate import BASENAME
+from rocrate.rocrate import BASENAME, ROCrate
 
 from rocrate_action_recorder.adapters.click import (
     IOArgumentNames,
@@ -703,6 +703,25 @@ class Test_collect_record_info_from_click:
 
 
 class Test_recorded_click:
+    @pytest.mark.parametrize("record_cwd", [False, True])
+    def test_record_cwd(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, record_cwd: bool) -> None:
+        monkeypatch.chdir(tmp_path)
+
+        @click.command(name="myscript")
+        @recorded_click(dataset_license="CC-BY-4.0", record_cwd=record_cwd)
+        def handler() -> None:
+            pass
+
+        result = CliRunner().invoke(handler, [])
+
+        assert result.exit_code == 0
+        action = ROCrate(tmp_path).get_by_type("CreateAction")[0]
+        if record_cwd:
+            assert action["environment"][0]["name"] == "PWD"
+            assert action["environment"][0]["value"] == str(tmp_path)
+        else:
+            assert "environment" not in action
+
     def test_defaults(self):
         runner = CliRunner()
 

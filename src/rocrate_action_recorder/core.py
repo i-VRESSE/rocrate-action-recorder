@@ -17,6 +17,7 @@ from pathlib import Path
 from shlex import quote
 
 from rocrate.model import File
+from rocrate.model.contextentity import ContextEntity
 from rocrate.model.creativework import CreativeWork
 from rocrate.model.dataset import Dataset
 from rocrate.model.person import Person
@@ -171,6 +172,7 @@ def record(
     end_time: datetime | None = None,
     current_user: str | None = None,
     dataset_license: str | None = None,
+    record_cwd: bool = False,
 ) -> Path:
     """Record a CLI invocation in an RO-Crate.
 
@@ -242,6 +244,8 @@ def record(
             to determine it from the system.
         dataset_license: Optional license string to set for the RO-Crate dataset.
             For example "CC-BY-4.0".
+        record_cwd: Record the current working directory at recording time as a PWD
+            PropertyValue in the action environment. Defaults to False.
 
     Returns:
         Path to the generated ro-crate-metadata.json file.
@@ -294,6 +298,7 @@ def record(
         end_time=end_time,
         current_user=current_user,
         dataset_license=dataset_license,
+        record_cwd=record_cwd,
     )
 
 
@@ -498,6 +503,7 @@ def add_action(
     all_inputs: list[File | Dataset],
     all_outputs: list[File | Dataset],
     agent: Person,
+    record_cwd: bool = False,
 ) -> None:
     """Add an action to the crate.
 
@@ -510,23 +516,35 @@ def add_action(
         all_inputs: List of input files/datasets.
         all_outputs: List of output files/datasets.
         agent: The Person who ran the action.
+        record_cwd: Whether to record the current working directory in the action environment.
     """
     existing_action = crate.get(action_id)
     if existing_action:
         # TODO add UpdateAction block with new inputs/outputs metadata and times?
         return
 
+    properties: dict[str, object] = {
+        "name": action_id,
+        "startTime": start_time.isoformat(),
+        "endTime": end_time.isoformat(),
+        "agent": agent,
+    }
+    if record_cwd:
+        properties["environment"] = [
+            crate.add(
+                ContextEntity(
+                    crate,
+                    properties={"@type": "PropertyValue", "name": "PWD", "value": str(Path.cwd())},
+                )
+            )
+        ]
+
     crate.add_action(
         instrument=software,
         identifier=action_id,
         object=all_inputs,
         result=all_outputs,
-        properties={
-            "name": action_id,
-            "startTime": start_time.isoformat(),
-            "endTime": end_time.isoformat(),
-            "agent": agent,
-        },
+        properties=properties,
     )
 
 
@@ -539,6 +557,7 @@ def _record_run(
     end_time: datetime,
     current_user: str,
     dataset_license: str | None = None,
+    record_cwd: bool = False,
 ) -> Path:
     """Internal function to record a run into an RO-Crate.
 
@@ -551,6 +570,7 @@ def _record_run(
         end_time: When the action ended.
         current_user: Username of the user.
         dataset_license: Optional license for the dataset.
+        record_cwd: Whether to record the current working directory in the action environment.
 
     Returns:
         Path to the ro-crate-metadata.json file.
@@ -569,6 +589,7 @@ def _record_run(
         end_time=end_time,
         current_user=current_user,
         dataset_license=dataset_license,
+        record_cwd=record_cwd,
     )
 
     crate.metadata.write(crate_root)
@@ -632,6 +653,7 @@ def _update_crate(
     end_time: datetime,
     current_user: str,
     dataset_license: str | None,
+    record_cwd: bool = False,
 ) -> ROCrate:
     """Internal function to update a crate with all necessary entities.
 
@@ -645,6 +667,7 @@ def _update_crate(
         end_time: When the action ended.
         current_user: Username.
         dataset_license: Optional license.
+        record_cwd: Whether to record the current working directory in the action environment.
 
     Returns:
         The updated ROCrate object.
@@ -667,6 +690,7 @@ def _update_crate(
         all_inputs=_unique_by_id(all_inputs),
         all_outputs=_unique_by_id(all_outputs),
         agent=agent,
+        record_cwd=record_cwd,
     )
 
     if dataset_license:

@@ -7,6 +7,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 from pytest import LogCaptureFixture
+from rocrate.rocrate import ROCrate
 
 from rocrate_action_recorder.core import (
     IOArgumentPath,
@@ -324,6 +325,66 @@ def test_playback_multiple_actions_sorted_by_endtime(tmp_path: Path):
 
 
 class Test_record:
+    @pytest.mark.parametrize("record_cwd", [False, True])
+    def test_record_cwd(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, record_cwd: bool) -> None:
+        working_dir = tmp_path / "working"
+        working_dir.mkdir()
+        (working_dir / "input.txt").write_text("hello")
+        monkeypatch.chdir(working_dir)
+        start_time = datetime(2026, 1, 16, 12, 0, 0, tzinfo=UTC)
+
+        record(
+            program=Program(name="myscript", description="Test script", version="1.2.3"),
+            ioargs=IOArgumentPaths(input_files=[IOArgumentPath("input", Path("input.txt"), "Input file")]),
+            start_time=start_time,
+            crate_dir=tmp_path,
+            argv=["myscript", "input.txt"],
+            dataset_license="CC-BY-4.0",
+            record_cwd=record_cwd,
+        )
+
+        crate = ROCrate(tmp_path)
+        action = crate.get_by_type("CreateAction")[0]
+        if record_cwd:
+            environment = action["environment"]
+            assert len(environment) == 1
+            assert environment[0]["@type"] == "PropertyValue"
+            assert environment[0]["name"] == "PWD"
+            assert environment[0]["value"] == str(working_dir)
+            assert (Path(environment[0]["value"]) / "input.txt").read_text() == "hello"
+            assert (
+                "https://w3id.org/ro/terms/workflow-run/context"
+                in json.loads((tmp_path / "ro-crate-metadata.json").read_text())["@context"]
+            )
+        else:
+            assert "environment" not in action
+            assert not crate.get_by_type("PropertyValue")
+
+    def test_record_cwd_multiple_actions(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        working_dirs = [tmp_path / "first", tmp_path / "second"]
+        for working_dir in working_dirs:
+            working_dir.mkdir()
+        start_time = datetime(2026, 1, 16, 12, 0, 0, tzinfo=UTC)
+
+        for working_dir in working_dirs:
+            monkeypatch.chdir(working_dir)
+            record(
+                program=Program(name="myscript", description="Test script", version="1.2.3"),
+                ioargs=IOArgumentPaths(),
+                start_time=start_time,
+                crate_dir=tmp_path,
+                argv=["myscript", working_dir.name],
+                dataset_license="CC-BY-4.0",
+                record_cwd=True,
+            )
+
+        crate = ROCrate(tmp_path)
+        actions = crate.get_by_type("CreateAction")
+        assert len(actions) == 2
+        for action, working_dir in zip(actions, working_dirs, strict=True):
+            assert action["environment"][0]["value"] == str(working_dir)
+        assert len(crate.get_by_type("PropertyValue")) == 2
+
     def test_without_dataset_license(self, tmp_path: Path, caplog: LogCaptureFixture):
         crate_dir = tmp_path
         start_time = datetime(2026, 1, 18, 14, 30, 0)

@@ -199,6 +199,7 @@ def record_argparse(
     current_user: str | None = None,
     software_version: str | None = None,
     dataset_license: str | None = None,
+    record_cwd: bool = False,
 ) -> Path:
     """Record a CLI invocation in an RO-Crate using argparse.
 
@@ -226,6 +227,8 @@ def record_argparse(
         software_version: Optional version string of the software. If None, attempts to
             detect it automatically.
         dataset_license: Optional license string to set for the RO-Crate dataset.
+        record_cwd: Record the current working directory at recording time as a PWD
+            PropertyValue in the action environment. Defaults to False.
 
     Returns:
         Path to the generated ro-crate-metadata.json file.
@@ -248,6 +251,7 @@ def record_argparse(
         end_time=end_time,
         current_user=current_user,
         dataset_license=dataset_license,
+        record_cwd=record_cwd,
     )
 
 
@@ -262,6 +266,7 @@ def recorded_argparse[T](
     enabled_argument: str | None = None,
     crate_dir: Path | None = None,
     crate_dir_argument: str | None = None,
+    record_cwd: bool = False,
 ) -> Callable[[Callable[[Namespace], T]], Callable[[Namespace], T]]:
     """Decorator to record a CLI invocation in an RO-Crate using argparse.
 
@@ -326,6 +331,8 @@ def recorded_argparse[T](
         dataset_license: License string for the dataset.
             Use license identifiers from https://spdx.org/licenses/ if possible.
             If None, no license is recorded.
+        record_cwd: Record the current working directory at recording time as a PWD
+            PropertyValue in the action environment. Defaults to False.
         enabled_argument: Name of the attribute in args that indicates whether
             to record the invocation. Records if None.
             If provided, the invocation is only recorded if `getattr(args, enabled_argument)` is truthy.
@@ -397,6 +404,7 @@ def recorded_argparse[T](
                     end_time=end_time,
                     crate_dir=my_crate_dir,
                     dataset_license=dataset_license,
+                    record_cwd=record_cwd,
                 )
 
             return result
