@@ -840,6 +840,7 @@ def record_cyclopts(
     crate_dir: Path | None = None,
     software_version: str | None = None,
     current_user: str | None = None,
+    record_cwd: bool = False,
 ) -> Generator[App]:
     """Context manager to record a Cyclopts CLI invocation in an RO-Crate.
 
@@ -1016,6 +1017,8 @@ def record_cyclopts(
             If a parsed argument is annotated with :data:`CRATE_DIR`, that value takes precedence.
         software_version: Optional software version override. Otherwise extracted from App instance.
         current_user: Optional user override. Uses current system user if None.
+        record_cwd: Record the current working directory at recording time as a PWD
+            PropertyValue in the action environment. Defaults to False.
     """
     start_time = datetime.now(tz=UTC)
     info = collect_info(app, tokens, software_version=software_version)
@@ -1041,4 +1044,5 @@ def record_cyclopts(
                 end_time=end_time,
                 current_user=current_user,
                 dataset_license=dataset_license,
+                record_cwd=record_cwd,
             )

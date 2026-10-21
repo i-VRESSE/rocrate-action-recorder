@@ -169,6 +169,7 @@ def record_click(
     current_user: str | None = None,
     software_version: str | None = None,
     dataset_license: str | None = None,
+    record_cwd: bool = False,
 ) -> Path:
     """Record a CLI invocation in an RO-Crate using Click.
 
@@ -189,6 +190,8 @@ def record_click(
         current_user: Optional user override.
         software_version: Optional software version override.
         dataset_license: Optional dataset license string.
+        record_cwd: Record the current working directory at recording time as a PWD
+            PropertyValue in the action environment. Defaults to False.
 
     Returns:
         Path to generated ro-crate-metadata.json.
@@ -208,6 +211,7 @@ def record_click(
         end_time=end_time,
         current_user=current_user,
         dataset_license=dataset_license,
+        record_cwd=record_cwd,
     )
 
 
@@ -218,6 +222,7 @@ def recorded_click[T](
     output_files: list[str] | None = None,
     dataset_license: str | None = None,
     enabled_argument: str | None = None,
+    record_cwd: bool = False,
 ) -> Callable[[Callable[..., T]], Callable[..., T]]:
     """Decorator to record a CLI invocation in an RO-Crate using Click.
 
@@ -267,6 +272,8 @@ def recorded_click[T](
         input_files: Parameter names representing input files.
         output_files: Parameter names representing output files.
         dataset_license: License string for the dataset.
+        record_cwd: Record the current working directory at recording time as a PWD
+            PropertyValue in the action environment. Defaults to False.
         enabled_argument: Optional parameter name controlling recording.
 
     Returns:
@@ -302,6 +309,7 @@ def recorded_click[T](
                     start_time=start_datetime,
                     end_time=end_time,
                     dataset_license=dataset_license,
+                    record_cwd=record_cwd,
                 )
 
             return result

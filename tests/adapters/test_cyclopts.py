@@ -2214,3 +2214,23 @@ class TestConfig:
             f"Argument values 'something' from {config_file} do not get recorded in 'ro-crate-metadata.json' file"
             in caplog.text
         )
+
+
+class Test_record_cyclopts:
+    @pytest.mark.parametrize("record_cwd", [False, True])
+    def test_record_cwd(self, working_tmp_path: Path, record_cwd: bool) -> None:
+        app = App(name="myscript", version="1.2.3", result_action="return_value")
+
+        @app.default
+        def main() -> None:
+            pass
+
+        with record_cyclopts(app, tokens=[], dataset_license="CC-BY-4.0", record_cwd=record_cwd):
+            app([])
+
+        action = ROCrate(working_tmp_path).get_by_type("CreateAction")[0]
+        if record_cwd:
+            assert action["environment"][0]["name"] == "PWD"
+            assert action["environment"][0]["value"] == str(working_tmp_path)
+        else:
+            assert "environment" not in action

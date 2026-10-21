@@ -2,7 +2,7 @@ from argparse import ArgumentParser, FileType, Namespace
 from pathlib import Path
 
 import pytest
-from rocrate.rocrate import BASENAME
+from rocrate.rocrate import BASENAME, ROCrate
 
 from rocrate_action_recorder.adapters.argparse import (
     IOArgumentNames,
@@ -778,6 +778,25 @@ class Test_collect_record_info_from_argparse:
 
 
 class Test_recorded_argparse:
+    @pytest.mark.parametrize("record_cwd", [False, True])
+    def test_record_cwd(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, record_cwd: bool) -> None:
+        monkeypatch.chdir(tmp_path)
+        parser = ArgumentParser(prog="myscript")
+        parser.add_argument("--version", action="version", version="1.2.3")
+
+        @recorded_argparse(parser=parser, dataset_license="CC-BY-4.0", record_cwd=record_cwd)
+        def handler(args: Namespace) -> None:
+            pass
+
+        handler(parser.parse_args([]))
+
+        action = ROCrate(tmp_path).get_by_type("CreateAction")[0]
+        if record_cwd:
+            assert action["environment"][0]["name"] == "PWD"
+            assert action["environment"][0]["value"] == str(tmp_path)
+        else:
+            assert "environment" not in action
+
     def test_defaults(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.chdir(tmp_path)
         parser = ArgumentParser(prog="myscript")
